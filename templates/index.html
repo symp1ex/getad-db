@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <title>Getad_DB</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #388E3C;
+            --danger-color: #f44336;
+            --success-color: #4CAF50;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #dfdfdf;
+            min-height: 100vh;
+        }
+
+        h1 {
+            margin: 0;
+            padding: 8px;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #333, #666); /* Градиент фона */
+            color: white;
+            text-align: center;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+			font-size: 26px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: -25px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #909090, #757575); /* Градиент фона */
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+			text-align: center;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .button-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .button-primary:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-3px);
+        }
+
+        .button-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .button-danger:hover {
+            background-color: #d32f2f;
+            transform: translateY(-3px);
+        }
+
+        .search-panel {
+            background: linear-gradient(135deg, #909090, #757575); /* Градиент фона */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin: 20px 0 50px 0;
+			transition: transform 0.3s ease;
+        }
+		
+        .delete-panel {
+            background: linear-gradient(135deg, #909090, #757575); /* Градиент фона */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin: 0px 0 50px 0;
+			transition: transform 0.3s ease;
+        }
+		
+		.search-panel:hover {
+            transform: translateY(-3px);
+        }
+		
+		.delete-panel:hover {
+            transform: translateY(-3px);
+        }		
+		
+		.search-days {
+            background: linear-gradient(135deg, #909090, #757575); /* Градиент фона */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin: 5px 0 5px 0;
+        }
+
+        input[type="text"], input[type="number"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus, input[type="number"]:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+
+        .flex-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .settings-icon {
+            position: absolute;
+            top: 50%;           /* размещаем по центру по вертикали */
+            transform: translateY(-50%);  /* компенсируем половину высоты самой иконки */
+            right: 20px;        /* отступ справа */
+            width: 32px;        /* увеличенный размер иконки */
+            height: 32px;       /* увеличенный размер иконки */
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        .settings-icon img {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.3s ease;  /* анимация при наведении */
+        }
+
+        .settings-icon:hover img {
+            transform: rotate(90deg);  /* вращение при наведении */
+        }
+    </style>
+    <script>
+        function deleteFR() {
+            const form = document.querySelector('.delete-form');
+            const formData = new FormData(form);
+
+            fetch('/del_fr', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                showModal(data);
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+            });
+        }
+
+        function showModal(messages) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            const messageElement = document.createElement('div');
+            messageElement.innerHTML = messages.join('<br>');
+
+            const button = document.createElement('button');
+            button.textContent = 'OK';
+            button.className = 'button button-primary';
+            button.onclick = () => document.body.removeChild(modal);
+
+            modal.appendChild(messageElement);
+            modal.appendChild(document.createElement('br'));
+            modal.appendChild(button);
+            document.body.appendChild(modal);
+        }
+    </script>
+    <script>
+    function submitForm(action) {
+        event.preventDefault(); // Предотвращаем стандартную отправку формы
+        const form = document.getElementById('searchForm');
+        form.action = action;
+        form.submit();
+    }
+    </script>	
+</head>
+<body>
+    <div class="header-container">
+        <h1>Getad_DB</h1>
+        <a href="{{ url_for('settings') }}" class="settings-icon">
+            <img src="{{ url_for('static', filename='gear.png') }}" alt="Settings">
+        </a>
+    </div>
+    
+    <div class="container">
+	  <div class="search-panel" style="flex: 1">
+			<h3>Поиск по базе данных ККТ</h3>
+			<form action="/search" method="post">
+				<div class="flex-container">
+					<input type="text" name="search_query" placeholder="Введите запрос" style="flex: 1">
+					<button class="button button-primary" type="submit">Поиск</button>
+				</div>
+			</form>
+		</div>	
+	
+        <div class="card">
+            <a href="/fiscals" class="button button-primary">База данных ККТ</a>
+            <a href="/expire_fn" class="button button-primary">Истекающие ФН</a>
+            <a href="/onlypos" class="button button-danger">Неудачные попытки подключения к ККТ</a>
+        </div>
+
+        <div class="card">
+            <form id="searchForm" class="search-days" method="post">
+                <div class="flex-container">
+                    <span>Показать список ККТ, не оправлявших данные более</span>
+                    <input type="number" name="search_query" min="1" max="365" style="width: 80px">
+                    <span>дней</span>
+                    <button type="submit" class="button button-primary" onclick="submitForm('/dont-update', event)">По дате подключения</button>
+                    <button type="submit" class="button button-primary" onclick="submitForm('/dont-validation', event)">По дате валидации</button>
+                </div>
+            </form>
+        </div>
+
+		 <div class="flex-container">
+			<div style="flex: 1"></div>
+			<div class="delete-panel" style="flex: 1">
+				<h3>Удаление ККТ из базы данных</h3>
+				<form class="delete-form" onsubmit="event.preventDefault(); deleteFR();">
+					<div class="flex-container">
+						<input type="text" name="search_query" placeholder="Введите серийный номер ККТ" style="flex: 1">
+						<button class="button button-danger" type="submit">Удалить</button>
+					</div>
+				</form>
+			</div>
+		</div>
+    </div>
+</body>
+</html>

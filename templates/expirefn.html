@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <title>Список заканчивающихся ФН</title>
+    <style>
+        :root {
+            --primary-color: #4a4a4a;
+            --background-color: #f0f0f0;
+            --hover-color: #c6c6c6;
+            --border-color: #e0e0e0;
+            --button-color: #4CAF50;
+            --button-hover-color: #388E3C;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--primary-color);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #333, #666);
+            padding: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            position: sticky;
+            top: 0;
+            color: white;
+            z-index: 1000; /* Добавляем z-index */
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .date-filter {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .marked-filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .date-label {
+            font-size: 16px;
+            color: white;
+            margin-right: 10px;
+        }
+
+        input[type="date"] {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .show-button {
+            background-color: var(--button-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .show-button:hover {
+            background-color: var(--button-hover-color);
+            transform: scale(1.05);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative; /* Добавляем для контекста позиционирования */
+            z-index: 1;
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 2fr 0.8fr 0.8fr auto; /* Изменяем распределение ширины столбцов */
+            padding: 15px;
+            background-color: #e0e0e0;
+            border-radius: 0 0 8px 8px; /* Скругляем только верхние углы */
+            font-weight: bold;
+            position: sticky;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            top: 50px; /* Высота header + padding */
+            margin-top: -13px; /* Добавляем отступ когда элемент в нормальном потоке */
+            margin-bottom: 10px;
+            z-index: 999; /* Меньше чем у header, но больше чем у записей */
+        }
+
+        .record {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 2fr 0.8fr 0.8fr auto; /* Такие же значения как в table-header */
+            padding: 15px;
+            margin-bottom: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .record {
+            cursor: pointer;
+        }
+
+        .record:active {
+            background-color: #e8f5e9;
+        }
+
+        .record:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            background-color: var(--hover-color);
+        }
+
+        .checkbox-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: -30px;  /* Используем отрицательный margin */
+            padding: 0;  /* Убираем padding */
+        }
+
+        .record-counter {
+            position: fixed;
+            top: 7px;
+            right: 10px;
+            color: black;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            z-index: 1111; /* Убедитесь, что счётчик выше других элементов */
+        }
+
+        .notification {
+            position: fixed;
+            top: 70px; /* Положение под шапкой */
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1001; /* Выше чем у шапки */
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+    <script>
+        function toggleTask(checkbox, serialNumber, fnSerial) {
+            fetch('/toggle_task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `serialNumber=${serialNumber}&fnSerial=${fnSerial}&checked=${checkbox.checked}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Если галочка "показать отмеченные" не стоит и мы отметили запись
+                    if (!document.querySelector('.marked-filter input[type="checkbox"]').checked && checkbox.checked) {
+                        // Находим родительский элемент записи и удаляем его
+                        checkbox.closest('.record').remove();
+                    }
+                } else {
+                    checkbox.checked = !checkbox.checked;
+                    alert('Произошла ошибка при обновлении статуса');
+                }
+            });
+        }
+
+        function toggleMarkedOnly(checkbox) {
+            window.location.href = `/expire_fn?show_marked_only=${checkbox.checked}&start_date={{ start_date }}&end_date={{ end_date }}`;
+        }
+
+        function copyRecordToClipboard(element) {
+            const cells = Array.from(element.children).slice(0, -1);
+            const headers = [
+                "Серийный номер",
+                "РНМ",
+                "Номер ФН",
+                "Юр.лицо",
+                "ИНН",
+                "Дата окончания"
+            ];
+
+            const text = cells.map((cell, index) =>
+                `${headers[index]}: ${cell.textContent.trim()}`
+            ).join('\n');
+
+            // Проверяем доступность Clipboard API
+            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(showSuccess)
+                    .catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
+
+            function showSuccess() {
+                element.style.backgroundColor = '#8dcc93';
+                setTimeout(() => {
+                    element.style.backgroundColor = '';
+                }, 200);
+
+                const notification = document.getElementById('notification');
+                notification.style.display = 'block';
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 850);
+            }
+
+            function fallbackCopy(text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';  // Предотвращаем прокрутку до элемента
+                textarea.style.opacity = '0';       // Делаем невидимым
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showSuccess();
+                } catch (err) {
+                    console.error('Ошибка копирования:', err);
+                }
+                document.body.removeChild(textarea);
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <form class="date-filter" method="POST">
+                <span class="date-label">Выберите диапазон дат:</span>
+                <input type="date" name="start_date" value="{{ start_date }}" required>
+                <input type="date" name="end_date" value="{{ end_date }}" required>
+                <button type="submit" class="show-button">Показать</button>
+            </form>
+            <div class="marked-filter">
+                <label>
+                    Показывать отмеченные
+                    <input type="checkbox" {% if show_marked_only %}checked{% endif %}
+                           onchange="toggleMarkedOnly(this)">
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="record-counter">
+        {{ records|length }}
+    </div>
+
+    <div id="notification" class="notification" style="display: none;">
+        Скопировано в буфер обмена
+    </div>
+
+    <div class="container">
+        <div class="table-header">
+            <div>Серийный номер</div>
+            <div>РНМ</div>
+            <div>Номер ФН</div>
+            <div>Юр.лицо</div>
+            <div>ИНН</div>
+            <div>Дата окончания</div>
+            <div class="checkbox-cell"></div>
+        </div>
+
+        {% for record in records %}
+        <div class="record" onclick="copyRecordToClipboard(this)">
+            <div>{{ record.serialNumber }}</div>
+            <div>{{ record.RNM }}</div>
+            <div>{{ record.fn_serial }}</div>
+            <div>{{ record.organizationName }}</div>
+            <div>{{ record.INN }}</div>
+            <div>{{ record.dateTime_end }}</div>
+            <div class="checkbox-cell">
+                <input type="checkbox"
+                       {% if record.is_marked %}checked{% endif %}
+                       onchange="toggleTask(this, '{{ record.serialNumber }}', '{{ record.fn_serial }}')">
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

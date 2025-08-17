@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <title>Администрирование</title>
+    <style>
+        :root {
+            --primary-color: #4a4a4a;
+            --background-color: #f0f0f0;
+            --hover-color: #c6c6c6;
+            --border-color: #e0e0e0;
+            --button-color: #4CAF50;
+            --button-hover-color: #388E3C;
+        }
+
+        h1 {
+            z-index: 10;
+            font-size: 26px; /* Добавьте это свойство для уменьшения размера */
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #333, #666);
+            padding: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            position: sticky;
+            top: 0;
+            color: white;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: var(--primary-color);
+        }
+
+        .tab.active {
+            border-bottom: 2px solid var(--button-color);
+            color: var(--button-color);
+            margin-bottom: -2px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .settings-group h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .setting-item {
+            margin-bottom: 15px;
+        }
+
+        .setting-item label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+        }
+
+        .setting-item input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .button-container {
+            margin-top: 20px;
+            text-align: right;
+        }
+
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .button-primary {
+            background-color: var(--button-color);
+            color: white;
+        }
+
+        .button-primary:hover {
+            background-color: var(--button-hover-color);
+        }
+
+        .button-secondary {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .button-secondary:hover {
+            background-color: #d32f2f;
+        }
+
+        .files-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .files-list li {
+            padding: 10px;
+            background: white;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .files-list li:hover {
+            background-color: var(--hover-color);
+        }
+
+        .files-list a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .notification {
+            position: fixed;
+            top: 67px; /* Положение над шапкой */
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 100001; /* Убедитесь, что значение выше, чем у других элементов */
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .notification.success {
+            background-color: var(--button-color);
+        }
+
+        .notification.error {
+            background-color: #f44336;
+        }
+
+        .directory {
+            background: #f8f9fa !important;
+        }
+
+        .dir-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .dir-header:hover {
+            background-color: var(--hover-color);
+        }
+
+        .toggle-icon {
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .subfiles li {
+            background: white;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .subfiles li:hover {
+            background-color: var(--hover-color);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .setting-item {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-right: 20px; /* Добавляем отступ справа */
+        }
+
+        .setting-item input {
+            width: 50%; /* Фиксированная ширина для всех input полей */
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-left: 10px; /* Отступ от label */
+        }
+
+        .settings-group {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1 style="margin: 0;">Администрирование</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('settings')">Настройки</button>
+            <button class="tab" onclick="switchTab('files')">Файлы</button>
+        </div>
+
+        <div id="settings" class="tab-content active">
+            <form id="settingsForm">
+                <div class="settings-group">
+                    <h3>Глобальные настройки</h3>
+                    <div class="setting-item">
+                        <label for="logs-autoclear-days">Автоудаление логов (дней)</label>
+                        <input type="number" id="logs-autoclear-days" name="global.logs-autoclear-days"
+                               value="{{ config['global']['logs-autoclear-days'] }}">
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Настройки веб-сервера</h3>
+                    <div class="setting-item">
+                        <label for="port">Порт</label>
+                        <input type="number" id="port" name="webserver.port"
+                               value="{{ config['webserver']['port'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="user">Пользователь</label>
+                        <input type="text" id="user" name="webserver.user"
+                               value="{{ config['webserver']['user'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="pass">Пароль</label>
+                        <input type="password" id="pass" name="webserver.pass"
+                               value="{{ config['webserver']['pass'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="admin">Администратор</label>
+                        <input type="text" id="admin" name="webserver.admin"
+                               value="{{ config['webserver']['admin'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="admin_pass">Пароль администратора</label>
+                        <input type="password" id="admin_pass" name="webserver.admin_pass"
+                               value="{{ config['webserver']['admin_pass'] }}">
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Настройки FTP</h3>
+                    <div class="setting-item">
+                        <label for="ftpHost">FTP хост</label>
+                        <input type="text" id="ftpHost" name="ftp-connect.ftpHost"
+                               value="{{ config['ftp-connect']['ftpHost'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="ftpUser">FTP пользователь</label>
+                        <input type="text" id="ftpUser" name="ftp-connect.ftpUser"
+                               value="{{ config['ftp-connect']['ftpUser'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="ftpPass">FTP пароль</label>
+                        <input type="password" id="ftpPass" name="ftp-connect.ftpPass"
+                               value="{{ config['ftp-connect']['ftpPass'] }}">
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Настройки базы данных</h3>
+                    <div class="setting-item">
+                        <label for="db-name">Имя базы данных</label>
+                        <input type="text" id="db-name" name="db-update.db-name"
+                               value="{{ config['db-update']['db-name'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="dbupdate-period-sec">Период обновления (сек)</label>
+                        <input type="number" id="dbupdate-period-sec" name="db-update.dbupdate-period-sec"
+                               value="{{ config['db-update']['dbupdate-period-sec'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="day_filter_expire_fn">Фильтр для таблицы "Истекающие ФН" (дней)</label>
+                        <input type="number" id="day_filter_expire_fn" name="db-update.day_filter_expire_fn"
+                               value="{{ config['db-update']['day_filter_expire_fn'] }}">
+                    </div>
+                </div>
+
+                <div class="button-container">
+                    <button type="button" class="button button-secondary" onclick="location.reload()">Отмена</button>
+                    <button type="submit" class="button button-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="files" class="tab-content">
+            <ul class="files-list">
+                {% for item in files %}
+                    {% if item.is_dir %}
+                        <li class="directory">
+                            <div class="dir-header" onclick="toggleDirectory(this)">
+                                <span>📁 {{ item.name }}</span>
+                                <span class="toggle-icon">▼</span>
+                            </div>
+                            <ul class="subfiles" style="display: none; margin-left: 20px; list-style: none;">
+                                {% for subfile in item.files %}
+                                    <li>
+                                        <span>📄 {{ subfile.name }}</span>
+                                        <a href="{{ url_for('download_file', filename=subfile.path) }}"
+                                           class="button button-primary">Скачать</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li>
+                            <span>📄 {{ item.name }}</span>
+                            <a href="{{ url_for('download_file', filename=item.path) }}"
+                               class="button button-primary">Скачать</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        function toggleDirectory(element) {
+            const subfiles = element.nextElementSibling;
+            const toggleIcon = element.querySelector('.toggle-icon');
+
+            if (subfiles.style.display === 'none') {
+                subfiles.style.display = 'block';
+                toggleIcon.textContent = '▼';
+            } else {
+                subfiles.style.display = 'none';
+                toggleIcon.textContent = '▶';
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.style.display = 'block';
+
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        document.getElementById('settingsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const settings = {};
+
+            formData.forEach((value, key) => {
+                const [section, option] = key.split('.');
+                if (!settings[section]) settings[section] = {};
+                settings[section][option] = value;
+            });
+
+            fetch('/save_settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Настройки успешно сохранены', 'success');
+                    setTimeout(() => location.reload(), 3000);
+                } else {
+                    showNotification('Ошибка при сохранении настроек', 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Ошибка при сохранении настроек', 'error');
+                console.error('Error:', error);
+            });
+        });
+    </script>
+</body>
+</html>

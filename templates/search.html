@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <title>Результаты поиска</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 0px; /* Установлено значение 0 для удаления стандартного отступа для h1 */
+            margin-left: -18px; /* Сдвигаем фон влево */
+            color: white; /* Цвет шрифта */
+            background: linear-gradient(135deg, #333, #666); /* Градиент фона */
+            padding: 15px; /* Отступы вокруг текста */
+            text-align: center; /* Выравнивание текста по центру */
+            border-radius: 5px; /* Скругление углов */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); /* Тень для эффекта глубины */
+            width: calc(100% + 23px); /* Увеличиваем ширину фона, чтобы компенсировать сдвиг */
+            padding-left: 0px; /* Увеличиваем отступ слева для сдвига текста */
+            position: fixed; /* Делаем заголовок липким */
+            top: 0; /* Позиция при прокрутке */
+            z-index: 10; /* Убедитесь, что заголовок выше других элементов */
+        }
+
+        .button-container {
+            text-align: right; /* Выравнивание кнопки по правому краю */
+            margin: 20px; /* Отступы вокруг кнопки */
+        }
+
+        .row-counter {
+            position: fixed; /* Позиционирование счётчика */
+            right: 10px; /* Отступ от правого края */
+            top: 7px; /* Отступ от верхнего края */
+            padding: 10px;
+            z-index: 11; /* Убедитесь, что счётчик выше других элементов */
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 80%;
+            margin: 20px auto;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+        }
+
+        th:first-child, td:first-child {
+            border-left: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background-color: #e6e6e6;
+        }
+
+        .active {
+            background-color: lightgray;
+        }
+
+        .download-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            border-radius: 5px;
+            position: fixed; /* Позиционирование кнопки */
+            left: -10px; /* Отступ от правого края */
+            top: 25px; /* Отступ от верхнего края */
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 11; /* Убедитесь, что заголовок выше других элементов */
+        }
+
+        .download-button:hover {
+            background-color: #388E3C;
+        }
+
+        html {
+        font-size: 65%; /* Уменьшение масштаба на 25% */
+        }
+    </style>
+    <script>
+        function sortTable(columnIndex) {
+            var table, rows, switching, i, x, y, shouldSwitch;
+            table = document.getElementById("data-table");
+            switching = true;
+            while (switching) {
+                switching = false;
+                rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("td")[columnIndex];
+                    y = rows[i + 1].getElementsByTagName("td")[columnIndex];
+                    if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                }
+            }
+            updateRowCounter(); // Обновляем счётчик строк после сортировки
+        }
+
+        function updateRowCounter() {
+            var table = document.getElementById("data-table");
+            var rowCount = table.rows.length - 1; // Учитываем только строки данных, исключая заголовок
+            document.getElementById("row-counter").innerText = " " + rowCount;
+        }
+
+        window.onload = function() {
+            updateRowCounter(); // Обновляем счётчик строк при загрузке страницы
+        }
+
+        function setColumnClickHandlers() {
+            var headers = document.querySelectorAll("th");
+            headers.forEach(function(header, index) {
+                header.addEventListener("click", function() {
+                    sortTable(index);
+                });
+            });
+        }
+
+        window.addEventListener("load", function() {
+            setColumnClickHandlers();
+        });
+    </script>
+    <script>
+        // Функция для генерации и загрузки JSON-файла
+        function downloadTXT(data, filename) {
+            var text = data.toString(); // Преобразуем данные в строку
+            var blob = new Blob([text], { type: "text/plain" }); // Создаем Blob с типом text/plain
+            var url = URL.createObjectURL(blob); // Создаем URL для Blob
+            var a = document.createElement("a"); // Создаем элемент <a>
+            a.href = url; // Устанавливаем href на созданный URL
+            a.download = filename; // Устанавливаем имя файла для скачивания
+            document.body.appendChild(a); // Добавляем элемент <a> в документ
+            a.click(); // Имитируем клик по элементу <a>
+            document.body.removeChild(a); // Удаляем элемент <a> из документа
+            URL.revokeObjectURL(url); // Освобождаем память, удаляя URL
+        }
+    </script>
+    <script>
+        // Функция для генерации и загрузки CSV-файла
+        function downloadCSV() {
+        var table, rows, csvContent = "data:text/csv;charset=utf-8,";
+        table = document.getElementById("data-table");
+        rows = table.rows;
+
+        for (var i = 1; i < rows.length; i++) {
+            var row = rows[i];
+            var checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked) {
+                var rowData = [];
+                for (var j = 1; j < row.cells.length; j++) { // Начинаем с 1, чтобы пропустить чекбокс
+                    rowData.push(row.cells[j].innerText);
+                }
+                csvContent += rowData.join(";") + "\r\n"; // Разделяем данные через ;
+            }
+        }
+
+        var encodedUri = encodeURI(csvContent);
+        var link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "selected_data.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    </script>
+</head>
+<body>
+    <h1>Результаты поиска для запроса "{{ search_query }}"</h1>
+    <div class="button-container">
+        <button class="download-button" onclick="downloadCSV()">Скачать выбранные</button>
+    </div>
+    <div class="row-counter" id="row-counter"> 0</div> <!-- Счётчик строк -->
+    <table border="1" id="data-table">
+        <thead>
+            <tr>
+                <th><input type="checkbox" onclick="toggleCheckboxes(this)"></th> <!-- Чекбокс для выбора всех -->
+                {% for column in columns %}
+                <th onclick="sortTable({{ loop.index0 }})">{{ column }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <br><br><br>
+        <tbody>
+            {% for row in search_results %}
+            <tr>
+                <td><input type="checkbox"></td> <!-- Чекбокс для каждой строки -->
+                {% for index, value in enumerate(row) %}
+                    {% if columns[index] == 'licenses' %}
+                        {% if value %} <!-- Проверяем, есть ли данные в поле licenses -->
+                            <td><a href="#" onclick="downloadTXT('{{ value }}', 'license.json')">Скачать</a></td>
+                        {% else %}
+                            <td></td> <!-- Если данных нет, оставляем ячейку пустой -->
+                        {% endif %}
+                    {% else %}
+                        <td>{{ value }}</td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <script>
+        function toggleCheckboxes(masterCheckbox) {
+            var checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(function(checkbox) {
+                checkbox.checked = masterCheckbox.checked;
+            });
+        }
+    </script>
+</body>
+</html>
