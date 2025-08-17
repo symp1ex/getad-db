@@ -15,7 +15,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #dfdfdf;
+            background: linear-gradient(135deg, #292929, #303030); /* очень тёмный градиент */
             min-height: 100vh;
         }
 
@@ -94,7 +94,7 @@
             margin: 20px 0 50px 0;
 			transition: transform 0.3s ease;
         }
-		
+
         .delete-panel {
             background: linear-gradient(135deg, #909090, #757575); /* Градиент фона */
             padding: 20px;
@@ -103,15 +103,15 @@
             margin: 0px 0 50px 0;
 			transition: transform 0.3s ease;
         }
-		
+
 		.search-panel:hover {
             transform: translateY(-3px);
         }
-		
+
 		.delete-panel:hover {
             transform: translateY(-3px);
-        }		
-		
+        }
+
 		.search-days {
             background: linear-gradient(135deg, #909090, #757575); /* Градиент фона */
             padding: 20px;
@@ -175,6 +175,32 @@
             transition: transform 0.3s ease;  /* анимация при наведении */
         }
 
+        .background-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            margin: 0 auto; /* центрирование */
+            width: 1350px; /* фиксированная ширина */
+            height: 100%;
+            background: #dfdfdf;
+            z-index: -1;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: -25px auto;
+            padding: 20px;
+        }
+
+        .header-container {
+            position: relative;
+            z-index: 2;
+        }
+
         .settings-icon:hover img {
             transform: rotate(90deg);  /* вращение при наведении */
         }
@@ -200,7 +226,7 @@
         function showModal(messages) {
             const modal = document.createElement('div');
             modal.className = 'modal';
-            
+
             const messageElement = document.createElement('div');
             messageElement.innerHTML = messages.join('<br>');
 
@@ -222,9 +248,10 @@
         form.action = action;
         form.submit();
     }
-    </script>	
+    </script>
 </head>
 <body>
+    <div class="background-layer"></div>
     <div class="header-container">
         <h1>Getad_DB</h1>
         <a href="{{ url_for('settings') }}" class="settings-icon">

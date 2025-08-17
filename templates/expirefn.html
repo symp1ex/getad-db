@@ -35,7 +35,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: var(--background-color);
+            background: linear-gradient(135deg, #292929, #303030); /* очень тёмный градиент */
             color: var(--primary-color);
         }
 
@@ -109,13 +109,13 @@
             display: grid;
             grid-template-columns: 1fr 1fr 1fr 2fr 0.8fr 0.8fr auto; /* Изменяем распределение ширины столбцов */
             padding: 15px;
-            background-color: #e0e0e0;
+            background-color: #d9d9d9;
             border-radius: 0 0 8px 8px; /* Скругляем только верхние углы */
             font-weight: bold;
             position: sticky;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             top: 50px; /* Высота header + padding */
-            margin-top: -13px; /* Добавляем отступ когда элемент в нормальном потоке */
+            margin-top: 7px; /* Добавляем отступ когда элемент в нормальном потоке */
             margin-bottom: 10px;
             z-index: 999; /* Меньше чем у header, но больше чем у записей */
         }
@@ -179,6 +179,32 @@
             z-index: 1001; /* Выше чем у шапки */
             display: none;
             animation: fadeIn 0.3s ease-in;
+        }
+
+        .background-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            margin: 0 auto; /* центрирование */
+            width: 1350px; /* фиксированная ширина */
+            height: 100%;
+            background: #dfdfdf;
+            z-index: -1;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: -25px auto;
+            padding: 20px;
+        }
+
+        .header-container {
+            position: relative;
+            z-index: 2;
         }
 
         @keyframes fadeIn {
@@ -276,6 +302,7 @@
     </script>
 </head>
 <body>
+    <div class="background-layer"></div>
     <div class="header">
         <div class="header-content">
             <form class="date-filter" method="POST">
