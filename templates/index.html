@@ -253,7 +253,7 @@
             <form id="searchForm" class="search-days" method="post">
                 <div class="flex-container">
                     <span>Показать список ККТ, не оправлявших данные более</span>
-                    <input type="number" name="search_query" min="1" max="365" style="width: 80px">
+                    <input type="number" name="search_query" min="1" max="365" placeholder="1" style="width: 80px">
                     <span>дней</span>
                     <button type="submit" class="button button-primary" onclick="submitForm('/dont-update', event)">По дате подключения</button>
                     <button type="submit" class="button button-primary" onclick="submitForm('/dont-validation', event)">По дате валидации</button>

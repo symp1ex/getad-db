@@ -20,6 +20,18 @@
             font-size: 26px; /* Добавьте это свойство для уменьшения размера */
         }
 
+        .home-icon {
+            width: 38px;
+            height: 38px;
+            margin-right: 15px;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+
+        .home-icon:hover {
+            transform: scale(1.1); /* Небольшая анимация при наведении */
+        }
+
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -257,7 +269,12 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <h1 style="margin: 0;">Администрирование</h1>
+            <div style="display: flex; align-items: center;">
+                <a href="{{ url_for('index') }}">
+                    <img src="{{ url_for('static', filename='home.png') }}" class="home-icon" alt="Home">
+                </a>
+                <h1 style="margin: 0;">Администрирование</h1>
+            </div>
         </div>
     </div>
 
@@ -413,7 +430,7 @@
 
         function showNotification(message, type) {
             const notification = document.getElementById('notification');
-            notification.textContent = message;
+            notification.innerHTML = message;
             notification.className = `notification ${type}`;
             notification.style.display = 'block';
 
@@ -444,7 +461,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showNotification('Настройки успешно сохранены', 'success');
+                    showNotification('Настройки успешно сохранены<br>Сервер будет перезапущен', 'success');
                     setTimeout(() => location.reload(), 3000);
                 } else {
                     showNotification('Ошибка при сохранении настроек', 'error');
