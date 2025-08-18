@@ -8,7 +8,7 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f0f0f0;
+            background: linear-gradient(135deg, #292929, #303030); /* очень тёмный градиент */
         }
 
         h1 {
@@ -46,31 +46,36 @@
         }
 
         table {
-            border-collapse: collapse;
+            border-collapse: separate; /* Меняем с collapse на separate */
+            border-spacing: 0 1px;    /* Добавляем пространство между строками */
             width: 80%;
-            margin: 20px auto;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin: 24px auto;
+            background-color: transparent; /* Делаем фон таблицы прозрачным */
+        }
+
+        tr {
+            background-color: #fff;    /* Белый фон для каждой строки */
+            margin-bottom: 3px;        /* Отступ между строками */
         }
 
         th, td {
             padding: 12px 15px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
-            border-right: 1px solid #ddd; /* Добавлено для разделения столбцов */
-        }
-
-        th:first-child, td:first-child {
-            border-left: 1px solid #ddd; /* Добавлено для разделения столбцов */
+            border: 1px solid #ddd;    /* Добавляем границу вокруг каждой ячейки */
         }
 
         th {
             background-color: #f2f2f2;
-            cursor: pointer;
+            border-bottom: 2px solid #ddd; /* Более заметная граница для заголовков */
         }
 
-        th:hover {
-            background-color: #e6e6e6;
+        tbody tr {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для каждой строки */
+            border-radius: 4px;        /* Скругление углов строки */
+        }
+
+        tbody tr:hover {
+            background-color: #f5f5f5; /* Цвет при наведении */
         }
 
         .active {

@@ -13,6 +13,7 @@ from functools import wraps
 from delete_fr import delete_fr
 import calendar
 from flask import send_from_directory
+from flask import make_response
 import configparser
 import threading
 
@@ -493,6 +494,12 @@ def save_settings():
         log_console_out("Error: не удалось сохранить настройки", "webs")
         exception_handler(type(e), e, e.__traceback__, "webs")
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/logout')
+def logout():
+    response = make_response('', 401)  # Код 401 = Unauthorized
+    response.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
+    return response
 
 
 if __name__ == "__main__":

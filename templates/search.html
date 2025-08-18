@@ -8,7 +8,7 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f0f0f0;
+            background: linear-gradient(135deg, #353535, #555555); /* очень тёмный градиент */
         }
 
         h1 {
@@ -59,36 +59,53 @@
             font-size: 12px;
         }
 
+        thead {
+            position: sticky;
+            top: 52px; /* Отступ от верха страницы, подстройте под высоту вашего h1 */
+            background-color: #f2f2f2;
+            z-index: 2;
+        }
+
         table {
-            border-collapse: collapse;
+            border-collapse: separate; /* Меняем с collapse на separate */
+            border-spacing: 0 4px;    /* Добавляем пространство между строками */
             width: 80%;
-            margin: 20px auto;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin: 24px auto;
+            background-color: transparent; /* Делаем фон таблицы прозрачным */
+        }
+
+        tr {
+            background-color: #fff;    /* Белый фон для каждой строки */
+            margin-bottom: 3px;        /* Отступ между строками */
         }
 
         th, td {
-            padding: 12px 15px;
+            padding: 14px 7px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
-            border-right: 1px solid #ddd;
-        }
-
-        th:first-child, td:first-child {
-            border-left: 1px solid #ddd;
+            border: 0px solid #ddd;    /* Добавляем границу вокруг каждой ячейки */
         }
 
         th {
-            background-color: #f2f2f2;
+            padding: 16px 15px;
+            background-color: #c7c7c7;
             cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative; /* Для эффекта поднятия */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для отделения от контента */
         }
 
         th:hover {
-            background-color: #e6e6e6;
+            background-color: #e6e6e6; /* Более темный оттенок при наведении */
+            transform: translateY(-1px); /* Легкий подъем */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для эффекта "всплытия" */
         }
 
-        .active {
-            background-color: lightgray;
+        tbody tr {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для каждой строки */
+        }
+
+        tbody tr:hover {
+            background-color: #b2b2b2; /* Цвет при наведении */
         }
 
         .download-button {
@@ -113,7 +130,7 @@
         }
 
         html {
-        font-size: 65%; /* Уменьшение масштаба на 25% */
+        font-size: 72%; /* Уменьшение масштаба на 25% */
         }
     </style>
     <script>
@@ -230,7 +247,7 @@
                 {% endfor %}
             </tr>
         </thead>
-        <br><br><br>
+        <br>
         <tbody>
             {% for row in search_results %}
             <tr>
