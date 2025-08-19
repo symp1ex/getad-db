@@ -3,18 +3,19 @@ import json
 from ftplib import FTP
 import sqlite3
 import time
-from logger import log_console_out, exception_handler, read_config_ini
+from logger import log_console_out, exception_handler, read_config_ini, db_path, config_path
 
 
 def clean_fn_sale_task():
     try:
-        config = read_config_ini("source/config.ini")
+        config = read_config_ini(config_path)
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
 
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS fn_sale_task (
@@ -25,7 +26,8 @@ def clean_fn_sale_task():
         conn.commit()
         conn.close()
 
-        conn = sqlite3.connect(f'source/{dbname}.db')
+
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
         # Получаем все записи из fn_sale_task
@@ -65,7 +67,7 @@ def clean_fn_sale_task():
 
 
 def ftp_connect():
-    config = read_config_ini("source/config.ini")
+    config = read_config_ini(config_path)
     dbupdate_period = int(config.get("db-update", "dbupdate-period-sec", fallback=None))
     while True:
         log_console_out("Начато обновление базы ФР", "pfb")
@@ -132,9 +134,10 @@ def ftp_connect():
 
 def save_not_fiscal(json_data, filename):
     try:
-        config = read_config_ini("source/config.ini")
+        config = read_config_ini(config_path)
         dbname = config.get("db-update", "db-name", fallback=None)
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        format_db_path = db_path.format(dbname=dbname)
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
         # Получение списка уникальных ключей JSON для создания столбцов
@@ -186,12 +189,13 @@ def save_not_fiscal(json_data, filename):
 
 def get_db_data(data):
     try:
-        config = read_config_ini("source/config.ini")
+        config = read_config_ini(config_path)
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
         #log_console_out("Начато обновление базы ФР", "pfb")
 
         # Создание SQLite-базы данных и подключение к ней
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
         # Создание таблицы, если она не существует

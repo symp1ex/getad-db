@@ -76,12 +76,13 @@
             border: none;
             background: none;
             font-size: 16px;
+            color: #111111; !important;
             color: var(--primary-color);
         }
 
         .tab.active {
             border-bottom: 2px solid var(--button-color);
-            color: var(--button-color);
+            color: #388e3c; !important;
             margin-bottom: -2px;
         }
 
@@ -159,10 +160,11 @@
         .files-list {
             list-style: none;
             padding: 0;
+            margin: 0;
         }
 
         .files-list li {
-            padding: 10px;
+            padding: 7px;
             background: white;
             margin-bottom: 5px;
             border-radius: 4px;
@@ -172,10 +174,11 @@
         }
 
         .files-list li:hover {
-            background-color: var(--hover-color);
+            background-color: #e9ecef;
         }
 
         .files-list a {
+            padding: 7px;
             color: var(--primary-color);
             text-decoration: none;
         }
@@ -202,25 +205,51 @@
             background-color: #f44336;
         }
 
-        .directory {
-            background: #f8f9fa !important;
-        }
-
         .dir-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 10px;
+            padding: 5px 5px; /* Уменьшаем отступы чтобы снизить высоту */
             cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%; /* Обеспечиваем полную ширину */
+            height: 100%;
+        }
+
+        .directory {
+            margin: 0px 0; /* Уменьшаем внешние отступы */
+            border-radius: 4px;
+            background: #f8f9fa;
+            border-left: 3px solid #4CAF50;
+            cursor: pointer; /* Курсор-указатель для всего элемента папки */
+        }
+
+        /* Опционально, сделать все вложенные элементы некликабельными, чтобы не перехватывали события */
+        .dir-header > * {
+            pointer-events: none;
+        }
+
+        /* Но кнопка скачивания должна оставаться кликабельной */
+        .dir-header .download-button {
+            pointer-events: auto;
+            margin-left: auto; /* Прижимаем кнопку к правому краю */
+            margin-right: 10px; /* Отступ справа от иконки переключения */
         }
 
         .dir-header:hover {
-            background-color: var(--hover-color);
+            background-color: #e9ecef;
         }
 
         .toggle-icon {
             font-size: 12px;
             margin-left: 10px;
+            margin-left: 8px;
+            transition: transform 0.2s;
+        }
+
+        .subfiles {
+            margin-left: 20px;
+            border-left: 1px solid var(--border-color);
+            padding-left: 15px;
         }
 
         .subfiles li {
@@ -306,6 +335,49 @@
             max-width: 1200px;
             margin: -25px auto;
             padding: 20px;
+        }
+
+        .folder-icon, .file-icon {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .folder-name, .file-name {
+            flex: 1;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 15px;
+            margin: 5px 0;
+            border-radius: 4px;
+            background: white;
+            transition: background-color 0.2s;
+            border-left: 3px solid #6c757d;
+        }
+
+        .file-item:hover {
+            background-color: #f1f3f5;
+        }
+
+        .download-button {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white !important;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.92em;
+            transition: background-color 0.2s;
+        }
+
+        .download-button:hover {
+            background-color: #388E3C;
+        }
+
+        .subfile {
+            margin-left: 20px;
+            border-left: 1px dashed #ced4da;
         }
     </style>
 </head>
@@ -403,14 +475,14 @@
                                value="{{ config['db-update']['dbupdate-period-sec'] }}">
                     </div>
                     <div class="setting-item">
-                        <label for="day_filter_expire_fn">Фильтр для таблицы "Истекающие ФН" (дней)</label>
-                        <input type="number" id="day_filter_expire_fn" name="db-update.day_filter_expire_fn"
-                               value="{{ config['db-update']['day_filter_expire_fn'] }}">
+                        <label for="day_filter_expire">Фильтрация просроченных записей (дней)</label>
+                        <input type="number" id="day_filter_expire" name="db-update.day_filter_expire"
+                               value="{{ config['db-update']['day_filter_expire'] }}">
                     </div>
                 </div>
 
                 <div class="button-container">
-                    <button type="button" class="button button-secondary" onclick="location.reload()">Отмена</button>
+                    <button type="button" class="button button-secondary" onclick="window.location.href='{{ url_for('settings') }}'">Отмена</button>
                     <button type="submit" class="button button-primary">Сохранить</button>
                 </div>
             </form>
@@ -418,28 +490,29 @@
 
         <div id="files" class="tab-content">
             <ul class="files-list">
-                {% for item in files %}
+                {% for item in files|sort(attribute='name')|sort(attribute='is_dir', reverse=true) %}
                     {% if item.is_dir %}
                         <li class="directory">
-                            <div class="dir-header" onclick="toggleDirectory(this)">
-                                <span>📁 {{ item.name }}</span>
-                                <span class="toggle-icon">▼</span>
+                            <div class="dir-header" onclick="toggleFiles('{{ item.name }}')">
+                                <span class="folder-icon">📁</span>
+                                <span class="folder-name">{{ item.name }}</span>
+                                <span class="toggle-icon" id="toggle-{{ item.name }}">▶</span>
                             </div>
-                            <ul class="subfiles" style="display: none; margin-left: 20px; list-style: none;">
-                                {% for subfile in item.files %}
-                                    <li>
-                                        <span>📄 {{ subfile.name }}</span>
-                                        <a href="{{ url_for('download_file', filename=subfile.path) }}"
-                                           class="button button-primary">Скачать</a>
-                                    </li>
-                                {% endfor %}
-                            </ul>
                         </li>
+                        {% for subitem in item.files|sort(attribute='name') %}
+                            <li class="file-item subfile" data-parent="{{ item.name }}" style="display: none;">
+                                <span class="file-icon">📄</span>
+                                <span class="file-name">{{ subitem.name }}</span>
+                                <a href="{{ url_for('download_file', filename=subitem.path) }}"
+                                   class="download-button">Скачать</a>
+                            </li>
+                        {% endfor %}
                     {% else %}
-                        <li>
-                            <span>📄 {{ item.name }}</span>
+                        <li class="file-item">
+                            <span class="file-icon">📄</span>
+                            <span class="file-name">{{ item.name }}</span>
                             <a href="{{ url_for('download_file', filename=item.path) }}"
-                               class="button button-primary">Скачать</a>
+                               class="download-button">Скачать</a>
                         </li>
                     {% endif %}
                 {% endfor %}
@@ -462,16 +535,22 @@
             event.currentTarget.classList.add('active');
         }
 
-        function toggleDirectory(element) {
-            const subfiles = element.nextElementSibling;
-            const toggleIcon = element.querySelector('.toggle-icon');
+        function toggleFiles(folderName) {
+            const files = document.querySelectorAll(`.file-item[data-parent="${folderName}"]`);
+            const toggleIcon = document.getElementById(`toggle-${folderName}`);
 
-            if (subfiles.style.display === 'none') {
-                subfiles.style.display = 'block';
+            const isHidden = files[0].style.display === 'none';
+
+            files.forEach(file => {
+                file.style.display = isHidden ? 'flex' : 'none';
+            });
+
+            if (isHidden) {
                 toggleIcon.textContent = '▼';
+                toggleIcon.style.transform = 'rotate(0deg)';
             } else {
-                subfiles.style.display = 'none';
                 toggleIcon.textContent = '▶';
+                toggleIcon.style.transform = 'rotate(-90deg)';
             }
         }
 

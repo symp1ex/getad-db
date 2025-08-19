@@ -2,9 +2,9 @@ from ftplib import FTP
 import sqlite3
 from datetime import datetime
 import threading
-from logger import log_console_out, exception_handler, read_config_ini
+from logger import log_console_out, exception_handler, read_config_ini, config_path, db_path
 
-config = read_config_ini("source/config.ini")
+config = read_config_ini(config_path)
 
 def messages_append(messages, message):
     try:
@@ -17,7 +17,7 @@ def messages_append(messages, message):
 
 def ftp_con():
     try:
-        config = read_config_ini("source/config.ini")
+        config = read_config_ini(config_path)
         FTP_HOST = config.get("ftp-connect", "ftpHost", fallback=None)
         FTP_USER = config.get("ftp-connect", "ftpUser", fallback=None)
         FTP_PASS = config.get("ftp-connect", "ftpPass", fallback=None)
@@ -85,9 +85,10 @@ def delete_record_by_serial_number(json_name):
     messages = []
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
 
         # Подключение к базе данных
-        connection = sqlite3.connect(f'source/{dbname}.db')
+        connection = sqlite3.connect(format_db_path)
         cursor = connection.cursor()
 
         # Выполнение запроса на удаление

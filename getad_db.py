@@ -1,9 +1,8 @@
-#0.6.1.2
 import os, json
 import time
 from datetime import datetime, timedelta, date
 from pfb import ftp_connect
-from logger import log_console_out, exception_handler, create_confgi_ini, read_config_ini
+from logger import log_console_out, exception_handler, create_confgi_ini, read_config_ini, config_path, db_path
 from flask import Flask, render_template, request, jsonify
 import sqlite3
 import multiprocessing
@@ -17,7 +16,7 @@ from flask import make_response
 import configparser
 import threading
 
-config = read_config_ini("source/config.ini")
+config = read_config_ini(config_path)
 try: port = int(config.getint("webserver", "port", fallback=None))
 except Exception: port = 30005
 
@@ -87,24 +86,38 @@ def requires_auth_admin(f):
 def get_data_pas_fiscals():
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
+        dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
 
-        connection = sqlite3.connect(f'source/{dbname}.db')
+        connection = sqlite3.connect(format_db_path)
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM pos_fiscals")
         data = cursor.fetchall()
         cursor.execute("PRAGMA table_info(pos_fiscals)")
-        columns = [column[1] for column in cursor.fetchall()]  # Получаем названия столбцов
+        columns = [column[1] for column in cursor.fetchall()]
 
-        # Создаем новый список для данных с замененными значениями в столбце licenses
+        # Создаем новый список для данных с дополнительной информацией об устаревании
         modified_data = []
         for row in data:
-            modified_row = list(row)  # Преобразуем кортеж в список
+            modified_row = list(row)
             licenses_data_index = columns.index('licenses')
+            current_time_index = columns.index('current_time')
+            v_time_index = columns.index('v_time')
+
+            # Обработка licenses
             licenses_data = row[licenses_data_index]
-            if licenses_data:  # Если есть данные в столбце licenses
-                # Замена данных в столбце licenses на ссылку
+            if licenses_data:
                 modified_row[licenses_data_index] = licenses_data
+
+            # Проверка устаревания записи
+            time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[current_time_index]
+            is_expired = not if_show_fn_to_date(time_to_check, dont_valid_fn) if time_to_check else False
+
+            # Добавляем признак устаревания в строку
+            modified_row.append(is_expired)
+
             modified_data.append(modified_row)
+
         connection.close()
         return modified_data, columns
     except Exception as e:
@@ -115,8 +128,9 @@ def get_data_pas_fiscals():
 def only_pos():
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
 
-        connection = sqlite3.connect(f'source/{dbname}.db')
+        connection = sqlite3.connect(format_db_path)
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM pos_not_fiscals")
         data = cursor.fetchall()
@@ -131,12 +145,14 @@ def only_pos():
 def search_dont_update(field):
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
 
         if request.method == 'POST':
             search_query = request.form['search_query']
             days = int(search_query)
+            dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
 
-            connection = sqlite3.connect(f'source/{dbname}.db')
+            connection = sqlite3.connect(format_db_path)
             cursor = connection.cursor()
             # Преобразуем текущую дату в формат, который хранится в базе данных
             today_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -155,11 +171,20 @@ def search_dont_update(field):
             for row in search_results:
                 modified_row = list(row)  # Преобразуем кортеж в список
                 licenses_data_index = columns.index('licenses')
+                current_time_index = columns.index('current_time')
+                v_time_index = columns.index('v_time')
+
                 licenses_data = row[licenses_data_index]
                 if licenses_data:  # Если есть данные в столбце licenses
                     # Замена данных в столбце licenses на ссылку
                     modified_row[licenses_data_index] = licenses_data
+
+                time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[current_time_index]
+                is_expired = not if_show_fn_to_date(time_to_check, dont_valid_fn) if time_to_check else False
+
                 modified_data.append(modified_row)
+
+                modified_row.append(is_expired)
             connection.close()
             return search_query, modified_data, columns
     except Exception as e:
@@ -200,10 +225,11 @@ def if_show_fn_to_date(date_string, dont_valid_fn):
 
 def get_expire_fn():
     try:
-        dont_valid_fn = int(config.get("db-update", "day_filter_expire_fn", fallback=5))
+        dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
 
         dbname = config.get("db-update", "db-name", fallback=None)
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        format_db_path = db_path.format(dbname=dbname)
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS fn_sale_task (
@@ -225,7 +251,7 @@ def get_expire_fn():
 
         show_marked_only = request.args.get('show_marked_only', 'true') == 'true'
 
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
         cursor.execute('SELECT serialNumber FROM fn_sale_task')
@@ -311,34 +337,53 @@ def pos():
 def search():
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = db_path.format(dbname=dbname)
 
         if request.method == 'POST':
             search_query = request.form['search_query']
-            connection = sqlite3.connect(f'source/{dbname}.db')
+            dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
+
+            connection = sqlite3.connect(format_db_path)
             cursor = connection.cursor()
-            cursor.execute("PRAGMA table_info(pos_fiscals)")  # Получаем названия столбцов из базы данных
+            cursor.execute("PRAGMA table_info(pos_fiscals)")
             columns = [column[1] for column in cursor.fetchall()]
-            # Создаем запрос SQL для поиска по всем столбцам
+
             query = "SELECT * FROM pos_fiscals WHERE "
             for column in columns:
                 query += f"{column} LIKE '%{search_query}%' OR "
-            query = query[:-4]  # Удаляем лишний OR в конце запроса
+            query = query[:-4]
+
             cursor.execute(query)
             search_results = cursor.fetchall()
-            # Создаем новый список для данных с замененными значениями в столбце licenses
+
+            # Создаем новый список для данных с проверкой на устаревание
             modified_data = []
             for row in search_results:
-                modified_row = list(row)  # Преобразуем кортеж в список
+                modified_row = list(row)
                 licenses_data_index = columns.index('licenses')
+                current_time_index = columns.index('current_time')
+                v_time_index = columns.index('v_time')
+
+                # Обработка licenses
                 licenses_data = row[licenses_data_index]
-                if licenses_data:  # Если есть данные в столбце licenses
-                    # Замена данных в столбце licenses на ссылку
+                if licenses_data:
                     modified_row[licenses_data_index] = licenses_data
+
+                # Проверка устаревания записи
+                time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[current_time_index]
+                is_expired = not if_show_fn_to_date(time_to_check, dont_valid_fn) if time_to_check else False
+
+                # Добавляем признак устаревания в строку
+                modified_row.append(is_expired)
+
                 modified_data.append(modified_row)
+
             connection.close()
-            return render_template('search.html', search_query=search_query, search_results=modified_data, columns=columns, enumerate=enumerate)
+            return render_template('search.html', search_query=search_query,
+                                   search_results=modified_data, columns=columns,
+                                   enumerate=enumerate)
     except Exception as e:
-        log_console_out("Error: не удалось сделать посиковый запрос", "webs")
+        log_console_out("Error: не удалось сделать поисковый запрос", "webs")
         exception_handler(type(e), e, e.__traceback__, "webs")
 
 
@@ -394,7 +439,8 @@ def toggle_task():
         checked = request.form.get('checked') == 'true'
 
         dbname = config.get("db-update", "db-name", fallback=None)
-        conn = sqlite3.connect(f'source/{dbname}.db')
+        format_db_path = db_path.format(dbname=dbname)
+        conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
         try:
@@ -424,32 +470,34 @@ def settings():
             item_path = os.path.join(source_dir, item)
             is_dir = os.path.isdir(item_path)
 
-            if is_dir:
-                # Если это директория, получаем список файлов в ней
-                subfiles = []
-                for subitem in os.listdir(item_path):
-                    subitem_path = os.path.join(item_path, subitem)
-                    if os.path.isfile(subitem_path):
-                        subfiles.append({
-                            'name': subitem,
-                            'path': os.path.join(item, subitem),
-                            'size': os.path.getsize(subitem_path)
-                        })
-                files_and_dirs.append({
-                    'name': item,
-                    'is_dir': True,
-                    'files': subfiles
-                })
-            else:
-                files_and_dirs.append({
-                    'name': item,
-                    'is_dir': False,
-                    'path': item,
-                    'size': os.path.getsize(item_path)
-                })
+            # Проверяем, что файл не имеет расширение .ini
+            if not (not is_dir and item.lower().endswith('.ini')):
+                if is_dir:
+                    # Если это директория, получаем список файлов в ней
+                    subfiles = []
+                    for subitem in os.listdir(item_path):
+                        subitem_path = os.path.join(item_path, subitem)
+                        # Пропускаем .ini файлы в поддиректориях также
+                        if not subitem.lower().endswith('.ini'):
+                            subfiles.append({
+                                'name': subitem,
+                                'path': os.path.join(item, subitem)
+                            })
+                    files_and_dirs.append({
+                        'name': item,
+                        'is_dir': True,
+                        'files': subfiles
+                    })
+                else:
+                    # Это файл
+                    files_and_dirs.append({
+                        'name': item,
+                        'is_dir': False,
+                        'path': item
+                    })
 
         # Читаем конфигурацию
-        config = read_config_ini("source/config.ini")
+        config = read_config_ini(config_path)
 
         return render_template('settings.html', config=config, files=files_and_dirs)
     except Exception as e:
@@ -483,7 +531,7 @@ def save_settings():
                 config.set(section, option, str(value))
 
         # Сохраняем в файл
-        with open('source/config.ini', 'w') as configfile:
+        with open(config_path, 'w') as configfile:
             config.write(configfile)
 
         shutdown_thread = threading.Thread(target=crash_server)
@@ -503,7 +551,7 @@ def logout():
 
 
 if __name__ == "__main__":
-    if not os.path.exists("source/config.ini"):
+    if not os.path.exists(config_path):
         create_confgi_ini()
 
     server_process = multiprocessing.Process(target=ftp_connect)

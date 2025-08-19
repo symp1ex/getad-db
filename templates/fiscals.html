@@ -38,7 +38,7 @@
             position: fixed; /* Позиционирование счётчика */
             z-index: 11; /* Убедитесь, что заголовок выше других элементов */
             right: 0px; /* Увеличиваем отступ слева для сдвига текста */
-            top: 7px;
+            top: 8px;
         }
 
         .home-icon:hover {
@@ -53,7 +53,7 @@
         .row-counter {
             position: fixed; /* Позиционирование счётчика */
             right: 55px; /* Отступ от правого края */
-            top: 7px; /* Отступ от верхнего края */
+            top: 9px; /* Отступ от верхнего края */
             padding: 10px;
             z-index: 11; /* Убедитесь, что счётчик выше других элементов */
             font-weight: bold;
@@ -76,7 +76,7 @@
         }
 
         tr {
-            background-color: #fff;    /* Белый фон для каждой строки */
+            background-color: #f0f0f0;    /* Белый фон для каждой строки */
             margin-bottom: 3px;        /* Отступ между строками */
         }
 
@@ -88,7 +88,7 @@
 
         th {
             padding: 16px 15px;
-            background-color: #c7c7c7;
+            background-color: #c4c4c4;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative; /* Для эффекта поднятия */
@@ -96,7 +96,7 @@
         }
 
         th:hover {
-            background-color: #e6e6e6; /* Более темный оттенок при наведении */
+            background-color: #eaeaea; /* Более темный оттенок при наведении */
             transform: translateY(-1px); /* Легкий подъем */
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для эффекта "всплытия" */
         }
@@ -106,7 +106,7 @@
         }
 
         tbody tr:hover {
-            background-color: #b2b2b2; /* Цвет при наведении */
+            background-color: #d1dade; /* Цвет при наведении */
         }
 
         .download-button {
@@ -120,7 +120,7 @@
             border-radius: 5px;
             position: fixed; /* Позиционирование кнопки */
             left: -10px; /* Отступ от правого края */
-            top: 25px; /* Отступ от верхнего края */
+            top: 30px; /* Отступ от верхнего края */
             cursor: pointer;
             font-weight: bold;
             z-index: 11; /* Убедитесь, что заголовок выше других элементов */
@@ -128,6 +128,15 @@
 
         .download-button:hover {
             background-color: #388E3C;
+        }
+
+        .expired-row {
+            background-color: #ffced3; /* бледно-розовый цвет */
+        }
+
+        /* При наведении делаем цвет немного темнее */
+        .expired-row:hover {
+            background-color: #ffafb7;
         }
 
         html {
@@ -179,19 +188,27 @@
         }
 
         function downloadCSV() {
-            var table, rows, csvContent = "data:text/csv;charset=utf-8,";
-            table = document.getElementById("data-table");
-            rows = table.rows;
+            var table = document.getElementById("data-table");
+            var rows = table.rows;
+            var csvContent = "data:text/csv;charset=utf-8,";
 
+            // Добавляем заголовки столбцов (начиная с индекса 1, чтобы пропустить столбец с чекбоксами)
+            var headers = [];
+            for (var j = 1; j < rows[0].cells.length; j++) {
+                headers.push(rows[0].cells[j].innerText);
+            }
+            csvContent += headers.join(";") + "\r\n";
+
+            // Добавляем выбранные строки данных
             for (var i = 1; i < rows.length; i++) {
                 var row = rows[i];
                 var checkbox = row.querySelector('input[type="checkbox"]');
                 if (checkbox && checkbox.checked) {
                     var rowData = [];
-                    for (var j = 1; j < row.cells.length; j++) { // Начинаем с 1, чтобы пропустить чекбокс
+                    for (var j = 1; j < row.cells.length; j++) {
                         rowData.push(row.cells[j].innerText);
                     }
-                    csvContent += rowData.join(";") + "\r\n"; // Разделяем данные через ;
+                    csvContent += rowData.join(";") + "\r\n";
                 }
             }
 
@@ -241,9 +258,9 @@
         <br>
         <tbody>
             {% for row in data %}
-            <tr>
+            <tr class="{{ 'expired-row' if row[-1] else '' }}">
                 <td><input type="checkbox"></td> <!-- Чекбокс для каждой строки -->
-                {% for index, value in enumerate(row) %}
+                {% for index, value in enumerate(row[:-1]) %} <!-- исключаем последний элемент (признак устаревания) -->
                     {% if columns[index] == 'licenses' %}
                         {% if value %}
                             <td><a href="#" onclick="downloadTXT('{{ value }}', 'license.json')">Скачать</a></td>

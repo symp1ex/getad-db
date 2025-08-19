@@ -4,6 +4,11 @@ import traceback
 from datetime import datetime, timedelta
 import configparser
 
+version = '0.6.3.4'
+config_path = 'source/config.ini'
+db_path = 'source/{dbname}.db'
+log_folder = 'source/logs'
+
 def create_confgi_ini():
     try:
         # Создание объекта парсера
@@ -26,11 +31,11 @@ def create_confgi_ini():
         config['ftp-connect']['ftpUser'] = ''
         config['ftp-connect']['ftpPass'] = ''
         config['db-update']['db-name'] = 'dbpos'
-        config['db-update']['dbupdate-period-sec'] = '1800'
-        config['db-update']['day_filter_expire_fn'] = '5'
+        config['db-update']['dbupdate-period-sec'] = '900'
+        config['db-update']['day_filter_expire'] = '5'
 
         # Запись изменений в файл
-        with open('source/config.ini', 'w') as configfile:
+        with open(config_path, 'w') as configfile:
             config.write(configfile)
 
         log_console_out("Создан 'config.ini' по умолчанию", "webs")
@@ -51,10 +56,9 @@ def read_config_ini(ini_file):
 
 def log_with_timestamp(message, name):
     try:
-        ini_file = "source/config.ini"
+        ini_file = config_path
         config = read_config_ini(ini_file)
 
-        log_folder = 'source/logs'
         if not os.path.exists(log_folder):
             os.makedirs(log_folder)
 
