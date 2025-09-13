@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime, timedelta
 import configparser
 
-version = '0.6.3.4'
+version = '0.6.3.7'
 config_path = 'source/config.ini'
 db_path = 'source/{dbname}.db'
 log_folder = 'source/logs'

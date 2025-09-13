@@ -109,10 +109,10 @@ def ftp_connect():
                         else:
                             # Если ключ "serialNumber" отсутствует, сохраняем JSON в отдельную таблицу
                             save_not_fiscal(json_data, filename)
-                        # Удаление временных файлов после чтения данных
-                        os.remove(local_filename)
                     except json.JSONDecodeError:
                         log_console_out(f"Error: Файл {filename} содержит некорректный JSON, пропускаем", "pfb")
+                # Удаление временных файлов после чтения данных
+                os.remove(local_filename)
 
             ftp.quit()
 

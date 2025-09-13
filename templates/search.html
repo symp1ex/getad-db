@@ -26,6 +26,7 @@
             position: fixed; /* Делаем заголовок липким */
             top: 0; /* Позиция при прокрутке */
             z-index: 10; /* Убедитесь, что заголовок выше других элементов */
+            font-size: 20px;
         }
 
         .home-icon {
@@ -37,7 +38,7 @@
             position: fixed; /* Позиционирование счётчика */
             z-index: 11; /* Убедитесь, что заголовок выше других элементов */
             right: 0px; /* Увеличиваем отступ слева для сдвига текста */
-            top: 10px;
+            top: 7px;
         }
 
         .home-icon:hover {
@@ -52,7 +53,7 @@
         .row-counter {
             position: fixed; /* Позиционирование счётчика */
             right: 55px; /* Отступ от правого края */
-            top: 12px; /* Отступ от верхнего края */
+            top: 10px; /* Отступ от верхнего края */
             padding: 10px;
             z-index: 11; /* Убедитесь, что счётчик выше других элементов */
             font-weight: bold;
@@ -65,17 +66,17 @@
             background-color: #f2f2f2;
             z-index: 2;
         }
-
+        
         table {
             border-collapse: separate; /* Меняем с collapse на separate */
             border-spacing: 0 4px;    /* Добавляем пространство между строками */
             width: 80%;
-            margin: 24px auto;
+            margin: 20px auto;
             background-color: transparent; /* Делаем фон таблицы прозрачным */
         }
 
         tr {
-            background-color: #fff;    /* Белый фон для каждой строки */
+            background-color: #f0f0f0;    /* Белый фон для каждой строки */
             margin-bottom: 3px;        /* Отступ между строками */
         }
 
@@ -95,7 +96,7 @@
         }
 
         th:hover {
-            background-color: #e3e3e3; /* Более темный оттенок при наведении */
+            background-color: #eaeaea; /* Более темный оттенок при наведении */
             transform: translateY(-1px); /* Легкий подъем */
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для эффекта "всплытия" */
         }
@@ -139,7 +140,60 @@
         }
 
         html {
-        font-size: 72%; /* Уменьшение масштаба на 25% */
+            font-size: 80%; /* Уменьшение масштаба на 25% */
+        }
+
+        .context-menu {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            padding: 10px;
+            z-index: 9;
+        }
+
+        .context-menu-item {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .context-menu-buttons {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        /* Общие стили для кнопок в контекстном меню */
+        .context-menu button {
+            margin: 0 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+            transition: background-color 0.3s;
+        }
+
+        /* Стиль для кнопки "ОК" */
+        .context-menu button:first-child {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .context-menu button:first-child:hover {
+            background-color: #388E3C;
+        }
+
+        /* Стиль для кнопки "Отмена" */
+        .context-menu button:last-child {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .context-menu button:last-child:hover {
+            background-color: #d32f2f;
+        }
+        .hidden-column {
+            display: none;
         }
     </style>
     <script>
@@ -212,22 +266,28 @@
             var rows = table.rows;
             var csvContent = "data:text/csv;charset=utf-8,";
 
-            // Добавляем заголовки столбцов (начиная с индекса 1, чтобы пропустить столбец с чекбоксами)
+            // Получаем только видимые заголовки (начиная с индекса 1, чтобы пропустить столбец с чекбоксами)
             var headers = [];
+            var visibleColumnIndexes = []; // Сохраняем индексы видимых столбцов
             for (var j = 1; j < rows[0].cells.length; j++) {
-                headers.push(rows[0].cells[j].innerText);
+                var cell = rows[0].cells[j];
+                if (!cell.classList.contains('hidden-column')) {
+                    headers.push(cell.innerText);
+                    visibleColumnIndexes.push(j);
+                }
             }
             csvContent += headers.join(";") + "\r\n";
 
-            // Добавляем выбранные строки данных
+            // Добавляем выбранные строки данных, только для видимых столбцов
             for (var i = 1; i < rows.length; i++) {
                 var row = rows[i];
                 var checkbox = row.querySelector('input[type="checkbox"]');
                 if (checkbox && checkbox.checked) {
                     var rowData = [];
-                    for (var j = 1; j < row.cells.length; j++) {
-                        rowData.push(row.cells[j].innerText);
-                    }
+                    // Используем только индексы видимых столбцов
+                    visibleColumnIndexes.forEach(function(columnIndex) {
+                        rowData.push(row.cells[columnIndex].innerText);
+                    });
                     csvContent += rowData.join(";") + "\r\n";
                 }
             }
@@ -240,6 +300,203 @@
             link.click();
             document.body.removeChild(link);
         }
+        // Добавляем новые функции для работы с контекстным меню
+        // Добавляем новые функции для работы с контекстным меню
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.getElementById('data-table');
+            const headers = table.getElementsByTagName('th');
+            
+            // Создаем контекстное меню
+            const contextMenu = document.createElement('div');
+            contextMenu.className = 'context-menu';
+            document.body.appendChild(contextMenu);
+
+        // Функции для работы с cookies
+            function setCookie(name, value, days) {
+                const expires = new Date();
+                expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+                document.cookie = name + '=' + JSON.stringify(value) + ';expires=' + expires.toUTCString() + ';path=/';
+            }
+
+            function getCookie(name) {
+                const nameEQ = name + "=";
+                const ca = document.cookie.split(';');
+                for(let i = 0; i < ca.length; i++) {
+                    let c = ca[i];
+                    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                    if (c.indexOf(nameEQ) === 0) {
+                        try {
+                            return JSON.parse(c.substring(nameEQ.length, c.length));
+                        } catch (e) {
+                            return null;
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // Получаем список столбцов, которые должны быть видимы по умолчанию
+            const defaultVisibleColumns = {{ default_visible_columns|tojson|safe }};
+
+            // Сохраняем состояние видимости столбцов
+            let columnStates = {};
+            const savedStates = getCookie('columnStates');
+
+                        // Обработчик правого клика по заголовку
+            Array.from(headers).forEach((header, index) => {
+                if (index === 0) return; // Пропускаем столбец с чекбоксами
+                
+                header.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    showContextMenu(e.pageX, e.pageY);
+                });
+
+                // Инициализируем состояния столбцов
+                columnStates[index] = true;
+            });
+            
+            Array.from(headers).forEach((header, index) => {
+                if (index === 0) return; // Пропускаем столбец с чекбоксами
+                
+                const columnName = header.textContent.trim();
+                
+                // Используем сохраненное состояние или значение по умолчанию
+                if (savedStates && savedStates[index] !== undefined) {
+                    columnStates[index] = savedStates[index];
+                } else {
+                    columnStates[index] = defaultVisibleColumns.includes(columnName);
+                }
+                
+                // Применяем начальное состояние видимости
+                const cells = table.querySelectorAll(`th:nth-child(${index + 1}), td:nth-child(${index + 1})`);
+                cells.forEach(cell => {
+                    cell.classList.toggle('hidden-column', !columnStates[index]);
+                });
+
+                // Добавляем обработчик правого клика
+                header.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    showContextMenu(e.pageX, e.pageY);
+                });
+            });
+
+            // Функция создания и показа контекстного меню
+            function showContextMenu(x, y) {
+                contextMenu.innerHTML = '';
+                
+                // Добавляем опцию "Выбрать всё"
+                const selectAllItem = document.createElement('div');
+                selectAllItem.className = 'context-menu-item';
+                
+                const selectAllCheckbox = document.createElement('input');
+                selectAllCheckbox.type = 'checkbox';
+                selectAllCheckbox.id = 'select-all';
+                selectAllCheckbox.checked = Object.values(columnStates).every(state => state);
+                
+                const selectAllLabel = document.createElement('label');
+                selectAllLabel.appendChild(selectAllCheckbox);
+                selectAllLabel.appendChild(document.createTextNode(' Выбрать всё'));
+                
+                selectAllItem.appendChild(selectAllLabel);
+                contextMenu.appendChild(selectAllItem);
+
+                // Добавляем разделитель
+                const divider = document.createElement('hr');
+                contextMenu.appendChild(divider);
+                
+                // Добавляем чекбоксы для каждого столбца
+                Array.from(headers).forEach((header, index) => {
+                    if (index === 0) return; // Пропускаем столбец с чекбоксами
+                    
+                    const item = document.createElement('div');
+                    item.className = 'context-menu-item';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.checked = columnStates[index];
+                    checkbox.dataset.columnIndex = index;
+                    
+                    const label = document.createElement('label');
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(' ' + header.textContent));
+                    
+                    item.appendChild(label);
+                    contextMenu.appendChild(item);
+                });
+
+                // Добавляем кнопки
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'context-menu-buttons';
+                
+                const okButton = document.createElement('button');
+                okButton.textContent = 'ОК';
+                okButton.onclick = applyColumnVisibility;
+                
+                const cancelButton = document.createElement('button');
+                cancelButton.textContent = 'Отмена';
+                cancelButton.onclick = hideContextMenu;
+                
+                buttonContainer.appendChild(okButton);
+                buttonContainer.appendChild(cancelButton);
+                contextMenu.appendChild(buttonContainer);
+
+                // Обработчик для чекбокса "Выбрать всё"
+                selectAllCheckbox.addEventListener('change', function() {
+                    const checkboxes = contextMenu.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(checkbox => {
+                        if (checkbox !== selectAllCheckbox) {
+                            checkbox.checked = selectAllCheckbox.checked;
+                        }
+                    });
+                });
+
+                // Обработчик для отслеживания состояния всех чекбоксов
+                const columnCheckboxes = contextMenu.querySelectorAll('input[type="checkbox"]:not(#select-all)');
+                columnCheckboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        const allChecked = Array.from(columnCheckboxes).every(cb => cb.checked);
+                        selectAllCheckbox.checked = allChecked;
+                    });
+                });
+
+                // Позиционируем меню
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = x + 'px';
+                contextMenu.style.top = y + 'px';
+            }
+
+            // Модифицируем функцию применения видимости столбцов
+            function applyColumnVisibility() {
+                const checkboxes = contextMenu.querySelectorAll('input[type="checkbox"]:not(#select-all)');
+                
+                checkboxes.forEach(checkbox => {
+                    const columnIndex = parseInt(checkbox.dataset.columnIndex);
+                    columnStates[columnIndex] = checkbox.checked;
+                    
+                    const cells = table.querySelectorAll(`th:nth-child(${columnIndex + 1}), td:nth-child(${columnIndex + 1})`);
+                    cells.forEach(cell => {
+                        cell.classList.toggle('hidden-column', !checkbox.checked);
+                    });
+                });
+                
+                // Сохраняем состояния в cookies на 180 дней
+                setCookie('columnStates', columnStates, 180);
+                
+                hideContextMenu();
+            }
+
+            // Функция скрытия контекстного меню
+            function hideContextMenu() {
+                contextMenu.style.display = 'none';
+            }
+
+            // Скрываем контекстное меню при клике вне его
+            document.addEventListener('click', function(e) {
+                if (!contextMenu.contains(e.target)) {
+                    hideContextMenu();
+                }
+            });
+        });
     </script>
 </head>
 <body>

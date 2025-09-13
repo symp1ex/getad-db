@@ -309,7 +309,15 @@ def index():
 @requires_auth
 def fiscals():
     data, columns = get_data_pas_fiscals()
-    return render_template('fiscals.html', data=data, columns=columns, enumerate=enumerate)
+    # Определяем столбцы, которые должны быть видимы по умолчанию
+    default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial', 'dateTime_end',
+                               'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
+                               'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
+    return render_template('fiscals.html',
+                         data=data,
+                         columns=columns,
+                         default_visible_columns=default_visible_columns,
+                         enumerate=enumerate)
 
 @app.route('/download_license/<int:index>')
 def download_license(index):
@@ -379,9 +387,13 @@ def search():
                 modified_data.append(modified_row)
 
             connection.close()
+            default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
+                                       'dateTime_end',
+                                       'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
+                                       'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
             return render_template('search.html', search_query=search_query,
                                    search_results=modified_data, columns=columns,
-                                   enumerate=enumerate)
+                                   default_visible_columns=default_visible_columns, enumerate=enumerate)
     except Exception as e:
         log_console_out("Error: не удалось сделать поисковый запрос", "webs")
         exception_handler(type(e), e, e.__traceback__, "webs")
@@ -392,16 +404,26 @@ def search():
 def dont_update():
     field = "current_time"
     search_query, modified_data, columns = search_dont_update(field)
-    return render_template('search.html', search_query=search_query, search_results=modified_data, columns=columns,
-                           enumerate=enumerate)
+    default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
+                               'dateTime_end',
+                               'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
+                               'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
+    return render_template('search.html', search_query=search_query,
+                           search_results=modified_data, columns=columns,
+                           default_visible_columns=default_visible_columns, enumerate=enumerate)
 
 @app.route('/dont-validation', methods=['GET', 'POST'])
 @requires_auth
 def dont_validation():
     field = "v_time"
     search_query, modified_data, columns = search_dont_update(field)
-    return render_template('search.html', search_query=search_query, search_results=modified_data, columns=columns,
-                           enumerate=enumerate)
+    default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
+                               'dateTime_end',
+                               'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
+                               'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
+    return render_template('search.html', search_query=search_query,
+                           search_results=modified_data, columns=columns,
+                           default_visible_columns=default_visible_columns, enumerate=enumerate)
 
 @app.route('/del_fr', methods=['POST'])
 @requires_auth_admin
