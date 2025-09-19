@@ -1,16 +1,21 @@
+import core.logger
+import core.configs
+import core.connectors
+import about
 import os
 import json
 from ftplib import FTP
 import sqlite3
 import time
-from logger import log_console_out, exception_handler, read_config_ini, db_path, config_path
+
+iikorms = core.connectors.IikoRms()
 
 
 def clean_fn_sale_task():
     try:
-        config = read_config_ini(config_path)
+        config = core.configs.read_config_ini(about.config_path)
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
 
         conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
@@ -52,25 +57,25 @@ def clean_fn_sale_task():
                     DELETE FROM fn_sale_task 
                     WHERE serialNumber = ?
                 ''', (task_serial,))
-                log_console_out(
-                    f"Удалена неактуальная запись из fn_sale_task: serialNumber={task_serial}, fn_serial={task_fn}",
-                    "pfb")
+                core.logger.db_service.info(
+                    f"Удалена неактуальная запись из fn_sale_task: serialNumber={task_serial}, fn_serial={task_fn}")
 
         conn.commit()
         conn.close()
 
-        log_console_out("Очистка устаревших записей в fn_sale_task завершена", "pfb")
+        core.logger.db_service.info("Очистка устаревших записей в 'fn_sale_task' завершена")
 
-    except Exception as e:
-        log_console_out("Error: не удалось выполнить очистку fn_sale_task", "pfb")
-        exception_handler(type(e), e, e.__traceback__, "pfb")
+    except Exception:
+        core.logger.db_service.error("Не удалось выполнить очистку fn_sale_task", exc_info=True)
 
 
 def ftp_connect():
-    config = read_config_ini(config_path)
+    config = core.configs.read_config_ini(about.config_path)
     dbupdate_period = int(config.get("db-update", "dbupdate-period-sec", fallback=None))
+    clients_update = 0
+
     while True:
-        log_console_out("Начато обновление базы ФР", "pfb")
+        core.logger.db_service.info("Начато обновление базы ФР")
         try:
             FTP_HOST = config.get("ftp-connect", "ftpHost", fallback=None)
             FTP_USER = config.get("ftp-connect", "ftpUser", fallback=None)
@@ -79,10 +84,11 @@ def ftp_connect():
             # Подключение к FTP и чтение файлов JSON
             ftp = FTP(FTP_HOST)
             ftp.login(user=FTP_USER, passwd=FTP_PASS)
-        except Exception as e:
-            log_console_out("Error: Не удалось подключиться к FTP-серверу, проверьте параметры подключения", "pfb")
-            exception_handler(type(e), e, e.__traceback__, "pfb")
-            log_console_out(f"Следущая попытка обновления будет произведена через ({dbupdate_period}) секунд.", "pfb")
+        except Exception:
+            core.logger.db_service.error(
+                "Не удалось подключиться к FTP-серверу, проверьте параметры подключения", exc_info=True)
+            core.logger.db_service.info(
+                f"Следущая попытка обновления будет произведена через ({dbupdate_period}) секунд")
             time.sleep(dbupdate_period)
             continue
 
@@ -110,7 +116,8 @@ def ftp_connect():
                             # Если ключ "serialNumber" отсутствует, сохраняем JSON в отдельную таблицу
                             save_not_fiscal(json_data, filename)
                     except json.JSONDecodeError:
-                        log_console_out(f"Error: Файл {filename} содержит некорректный JSON, пропускаем", "pfb")
+                        core.logger.db_service.error(
+                            f"Файл {filename} содержит некорректный JSON, пропускаем", exc_info=True)
                 # Удаление временных файлов после чтения данных
                 os.remove(local_filename)
 
@@ -118,25 +125,28 @@ def ftp_connect():
 
             clean_fn_sale_task()
 
-            log_console_out("Обновление базы ФР завершено", "pfb")
-            log_console_out(f"Следущее обновление будет произведено через ({dbupdate_period}) секунд.", "pfb")
+            if clients_update == 0:
+                iikorms.update_clients_info()
+                clients_update = 1
+
+            core.logger.db_service.info("Обновление базы ФР завершено")
+            core.logger.db_service.info(f"Следущее обновление будет произведено через ({dbupdate_period}) секунд")
 
             time.sleep(dbupdate_period)
 
-        except Exception as e:
+        except Exception:
             ftp.quit()
-            log_console_out(f"Error: не удалось загрузить файл c FTP", "pfb")
-            exception_handler(type(e), e, e.__traceback__, "pfb")
-            log_console_out(f"Следущая попытка обновления будет произведена через ({dbupdate_period}) секунд.", "pfb")
+            core.logger.db_service.error(f"Не удалось загрузить файл c FTP", exc_info=True)
+            core.logger.db_service.info(f"Следущая попытка обновления будет произведена через ({dbupdate_period}) секунд")
             time.sleep(dbupdate_period)
             continue
 
 
 def save_not_fiscal(json_data, filename):
     try:
-        config = read_config_ini(config_path)
+        config = core.configs.read_config_ini(about.config_path)
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
         conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
@@ -181,18 +191,17 @@ def save_not_fiscal(json_data, filename):
         )
 
         conn.commit()
-    except Exception as e:
-        log_console_out(f"Error: Не удалось сохранить JSON-файл {filename} в таблицу pos_not_fiscals", "pfb")
-        exception_handler(type(e), e, e.__traceback__, "pfb")
+    except Exception:
+        core.logger.db_service.error(
+            f"Не удалось сохранить JSON-файл {filename} в таблицу [pos_not_fiscals]", exc_info=True)
     finally:
         conn.close()
 
 def get_db_data(data):
     try:
-        config = read_config_ini(config_path)
+        config = core.configs.read_config_ini(about.config_path)
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
-        #log_console_out("Начато обновление базы ФР", "pfb")
+        format_db_path = about.db_path.format(dbname=dbname)
 
         # Создание SQLite-базы данных и подключение к ней
         conn = sqlite3.connect(format_db_path)
@@ -229,15 +238,13 @@ def get_db_data(data):
                 cursor.execute(
                     f'''INSERT OR REPLACE INTO pos_fiscals (serialNumber, {', '.join(existing_columns)}) VALUES (?, {placeholders})''',
                     (filename, *values))
-        except Exception as e:
-            log_console_out(f"Error: Файл уже был удалён", "pfb")
-            exception_handler(type(e), e, e.__traceback__, "pfb")
+        except Exception:
+            core.logger.db_service.error(f"Файл уже был удалён", exc_info=True)
             pass
 
         # Сохранение изменений и закрытие соединения
         conn.commit()
         conn.close()
-        #log_console_out(f"ФР с серийным номером '{filename}' добавлен\обновлён в БД.", "pfb")
-    except Exception as e:
-        log_console_out("Error: попытка сохранить полученные данные в базу данных завершилась неудачей", "pfb")
-        exception_handler(type(e), e, e.__traceback__, "pfb")
+    except Exception:
+        core.logger.db_service.error(
+            f"Попытка сохранить данные '{data}' в базу данных завершилась неудачей", exc_info=True)

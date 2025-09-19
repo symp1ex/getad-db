@@ -1,23 +1,25 @@
+import core.logger
+import core.configs
+import about
 from ftplib import FTP
 import sqlite3
 from datetime import datetime
 import threading
-from logger import log_console_out, exception_handler, read_config_ini, config_path, db_path
 
-config = read_config_ini(config_path)
+config = core.configs.read_config_ini(about.config_path)
 
 def messages_append(messages, message):
     try:
         timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S.%f")[:-3]+"]"
         messages.append(f"{timestamp} {message}")
-    except Exception as e:
-        log_console_out("Error: Возникло исключение при попытки добавить метку времени к сообщению в модальном окне", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error(
+            "Возникло исключение при попытки добавить метку времени к сообщению в модальном окне", exc_info=True)
 
 
 def ftp_con():
     try:
-        config = read_config_ini(config_path)
+        config = core.configs.read_config_ini(about.config_path)
         FTP_HOST = config.get("ftp-connect", "ftpHost", fallback=None)
         FTP_USER = config.get("ftp-connect", "ftpUser", fallback=None)
         FTP_PASS = config.get("ftp-connect", "ftpPass", fallback=None)
@@ -26,9 +28,9 @@ def ftp_con():
         ftp = FTP(FTP_HOST)
         ftp.login(user=FTP_USER, passwd=FTP_PASS)
         return ftp
-    except Exception as e:
-        log_console_out("Error: Не удалось подключиться к FTP-серверу, проверьте параметры подключения", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error(
+            "Не удалось подключиться к FTP-серверу, проверьте параметры подключения", exc_info=True)
 
 def ftp_delete_json(json_name):
     messages = []
@@ -36,8 +38,8 @@ def ftp_delete_json(json_name):
         # Подключаемся к FTP-серверу
         ftp = ftp_con()  # Предполагается, что ftp_con возвращает объект FTP
         if ftp is None:
-            log_console_out(f"Error: Не удалось подключиться к FTP-серверу.", "webs")
-            messages_append(messages, "Error: Не удалось подключиться к FTP-серверу.")
+            core.logger.web_server.warning(f"Не удалось подключиться к FTP-серверу")
+            messages_append(messages, "Error: Не удалось подключиться к FTP-серверу")
             return messages
 
         # Проверяем наличие файла на сервере
@@ -45,14 +47,13 @@ def ftp_delete_json(json_name):
         if f"{json_name}.json" in files:
             # Удаляем файл
             ftp.delete(f"{json_name}.json")
-            log_console_out(f"Файл '{json_name}.json' успешно удален с FTP-сервера.", "webs")
-            messages_append(messages, f"Файл '{json_name}.json' успешно удален с FTP-сервера.")
+            core.logger.web_server.info(f"Файл '{json_name}.json' успешно удален с FTP-сервера")
+            messages_append(messages, f"Файл '{json_name}.json' успешно удален с FTP-сервера")
         else:
-            log_console_out(f"Файл '{json_name}.json' не найден на FTP-сервере.", "webs")
-            messages_append(messages, f"Файл '{json_name}.json' не найден на FTP-сервере.")
-    except Exception as e:
-        log_console_out(f"Error: Не удалось удалить файл '{json_name}.json' с FTP-сервера", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+            core.logger.web_server.info(f"Файл '{json_name}.json' не найден на FTP-сервере")
+            messages_append(messages, f"Файл '{json_name}.json' не найден на FTP-сервере")
+    except Exception:
+        core.logger.web_server.error(f"Не удалось удалить файл '{json_name}.json' с FTP-сервера", exc_info=True)
     return messages
 
 def ftp_delete_db():
@@ -62,8 +63,8 @@ def ftp_delete_db():
         # Подключаемся к FTP-серверу
         ftp = ftp_con()  # Предполагается, что ftp_con возвращает объект FTP
         if ftp is None:
-            log_console_out(f"Error: Не удалось подключиться к FTP-серверу.", "webs")
-            messages_append(messages, "Error: Не удалось подключиться к FTP-серверу.")
+            core.logger.web_server.warning(f"Не удалось подключиться к FTP-серверу")
+            messages_append(messages, "Не удалось подключиться к FTP-серверу")
             return messages
 
         # Проверяем наличие файла на сервере
@@ -71,21 +72,20 @@ def ftp_delete_db():
         if ftp_dbname in files:
             # Удаляем файл
             ftp.delete(ftp_dbname)
-            log_console_out(f"Файл '{ftp_dbname}' успешно удален с FTP-сервера.", "webs")
-            messages_append(messages, f"Файл '{ftp_dbname}' успешно удален с FTP-сервера.")
+            core.logger.web_server.info(f"Файл '{ftp_dbname}' успешно удален с FTP-сервера.")
+            messages_append(messages, f"Файл '{ftp_dbname}' успешно удален с FTP-сервера")
         else:
-            log_console_out(f"Файл '{ftp_dbname}' не найден на FTP-сервере.", "webs")
-            messages_append(messages, f"Файл '{ftp_dbname}' не найден на FTP-сервере.")
-    except Exception as e:
-        log_console_out(f"Error: Не удалось удалить файл '{ftp_dbname}' с FTP-сервера", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+            core.logger.web_server.info(f"Файл '{ftp_dbname}' не найден на FTP-сервере")
+            messages_append(messages, f"Файл '{ftp_dbname}' не найден на FTP-сервере")
+    except Exception:
+        core.logger.web_server.error(f"Не удалось удалить файл '{ftp_dbname}' с FTP-сервера", exc_info=True)
     return messages
 
 def delete_record_by_serial_number(json_name):
     messages = []
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
 
         # Подключение к базе данных
         connection = sqlite3.connect(format_db_path)
@@ -96,18 +96,18 @@ def delete_record_by_serial_number(json_name):
 
         # Проверка количества затронутых строк
         if cursor.rowcount > 0:
-            log_console_out(f"Запись с 'serialNumber = {json_name}' в '{dbname}.db' успешно удалена.", "webs")
-            messages_append(messages, f"Запись с 'serialNumber = {json_name}' в {dbname}.db успешно удалена.")
+            core.logger.web_server.info(f"Запись с 'serialNumber = {json_name}' в '{dbname}.db' успешно удалена")
+            messages_append(messages, f"Запись с 'serialNumber = {json_name}' в {dbname}.db успешно удалена")
         else:
-            log_console_out(f"Запись с 'serialNumber = {json_name}' в '{dbname}.db' не найдена.", "webs")
-            messages_append(messages, f"Запись с 'serialNumber = {json_name}' в '{dbname}.db' не найдена.")
+            core.logger.web_server.info(f"Запись с 'serialNumber = {json_name}' в '{dbname}.db' не найдена")
+            messages_append(messages, f"Запись с 'serialNumber = {json_name}' в '{dbname}.db' не найдена")
 
         # Сохранение изменений
         connection.commit()
 
-    except Exception as e:
-        log_console_out(f"Error: Не удалось удалить запись c serialNumber = {json_name} из базы данных", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error(
+            f"Не удалось удалить запись c serialNumber = {json_name} из базы данных", exc_info=True)
 
     finally:
         if 'connection' in locals():
@@ -131,9 +131,8 @@ def delete_fr(json_name):
         # Запускаем поток
         delete_record_by_serial_number_theard.start()
 
-    except Exception as e:
-        log_console_out("Error: Не удалось удалить всю информацию об ФР с FTP-сервера", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Не удалось удалить всю информацию об ФР с FTP-сервера", exc_info=True)
     finally:
         if 'ftp' in locals():
             ftp.quit()  # Закрываем соединение с FTP-сервером

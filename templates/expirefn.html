@@ -94,20 +94,34 @@
 
         .show-button:hover {
             background-color: var(--button-hover-color);
-            transform: scale(1.05);
+            transform: scale(1.03);
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            position: relative; /* Добавляем для контекста позиционирования */
-            z-index: 1;
-        }
+.container {
+    max-width: 1300px; /* было 1200px */
+    margin: -25px auto;
+    padding: 20px;
+}
+
+.header-content {
+    max-width: 1300px; /* было 1200px */
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
         .table-header {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 2fr 0.8fr 0.8fr auto; /* Изменяем распределение ширины столбцов */
+            grid-template-columns: minmax(150px, 200px) /* Клиент */
+                        minmax(120px, 160px)  /* Серийный номер */
+                        minmax(100px, 140px)  /* РНМ */
+                        minmax(100px, 140px)  /* Номер ФН */
+                        minmax(180px, 350px)  /* Юр.лицо */
+                        minmax(80px, 110px)   /* ИНН */
+                        minmax(100px, 140px)  /* Дата */
+                        auto;  
+            gap: 14px;
             padding: 15px;
             background-color: #d9d9d9;
             border-radius: 0 0 8px 8px; /* Скругляем только верхние углы */
@@ -122,7 +136,15 @@
 
         .record {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 2fr 0.8fr 0.8fr auto; /* Такие же значения как в table-header */
+            grid-template-columns: minmax(150px, 200px) /* Клиент */
+                        minmax(120px, 160px)  /* Серийный номер */
+                        minmax(100px, 140px)  /* РНМ */
+                        minmax(100px, 140px)  /* Номер ФН */
+                        minmax(180px, 350px)  /* Юр.лицо */
+                        minmax(80px, 110px)   /* ИНН */
+                        minmax(100px, 140px)  /* Дата */
+                        auto;  
+            gap: 14px;
             padding: 15px;
             margin-bottom: 10px;
             background-color: white;
@@ -197,7 +219,7 @@
         .container {
             position: relative;
             z-index: 1;
-            max-width: 1200px;
+            max-width: 1300px; /* было 1200px */
             margin: -25px auto;
             padding: 20px;
         }
@@ -205,6 +227,79 @@
         .header-container {
             position: relative;
             z-index: 2;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 400px;
+            border-radius: 5px;
+            z-index: 2001;
+        }
+
+        .modal-field {
+            margin: 10px 0;
+        }
+
+        .modal-field input {
+            width: 100%;            /* Занимает всю доступную ширину */
+            padding: 5px 8px;       /* Отступы внутри поля ввода */
+            box-sizing: border-box; /* Учитывает padding в общей ширине */
+            margin-top: 5px;        /* Отступ от label */
+}
+
+        .modal-field label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .modal-buttons {
+            text-align: right;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            margin-left: 10px;
+            padding: 5px 15px;
+        }
+
+        /* Стиль для кнопки "OK" */
+        .modal-buttons button:first-child {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        /* Стиль для кнопки "Отмена" */
+        .modal-buttons button:last-child {
+            background-color: #f44336;
+            color: white;
+        }
+
+        /* Эффект при наведении */
+        .modal-buttons button:hover {
+            opacity: 0.8;
+        }
+
+        .client-name {
+            cursor: pointer;
+            color: #0066cc;
+        }
+
+        .client-name:hover {
+            text-decoration: underline;
         }
 
         @keyframes fadeIn {
@@ -249,6 +344,7 @@
         function copyRecordToClipboard(element) {
             const cells = Array.from(element.children).slice(0, -1);
             const headers = [
+                "Клиент",
                 "Серийный номер",
                 "РНМ",
                 "Номер ФН",
@@ -299,6 +395,44 @@
                 document.body.removeChild(textarea);
             }
         }
+
+        let currentUrlRms = '';
+
+        function showClientModal(element, urlRms, serverName) {
+            currentUrlRms = urlRms;
+            document.getElementById('urlRms').textContent = urlRms;
+            document.getElementById('serverName').value = serverName || '';
+            document.getElementById('clientModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('clientModal').style.display = 'none';
+        }
+
+        function saveClientName() {
+            const newServerName = document.getElementById('serverName').value;
+            
+            fetch('/update_client_name', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    url_rms: currentUrlRms,
+                    server_name: newServerName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Перезагружаем страницу для отображения изменений
+                } else {
+                    alert('Ошибка при сохранении: ' + data.error);
+                }
+            });
+            
+            closeModal();
+        }        
     </script>
 </head>
 <body>
@@ -338,6 +472,7 @@
 
     <div class="container">
         <div class="table-header">
+            <div>Клиент</div>  
             <div>Серийный номер</div>
             <div>РНМ</div>
             <div>Номер ФН</div>
@@ -349,6 +484,10 @@
 
         {% for record in records %}
         <div class="record" onclick="copyRecordToClipboard(this)">
+            <div class="client-name" 
+                onclick="event.stopPropagation(); showClientModal(this, '{{ record.url_rms }}', '{{ record.client }}')">
+                {{ record.client if record.client and record.client != 'None' else 'Неизвестно' }}
+            </div>
             <div>{{ record.serialNumber }}</div>
             <div>{{ record.RNM }}</div>
             <div>{{ record.fn_serial }}</div>
@@ -363,5 +502,21 @@
         </div>
         {% endfor %}
     </div>
+    <div id="clientModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-field">
+            <label>Адрес сервера:</label>
+            <span id="urlRms"></span>
+        </div>
+        <div class="modal-field">
+            <label>Клиент:</label>
+            <input type="text" id="serverName">
+        </div>
+        <div class="modal-buttons">
+            <button onclick="saveClientName()">OK</button>
+            <button onclick="closeModal()">Отмена</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

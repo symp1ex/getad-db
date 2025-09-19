@@ -9,6 +9,8 @@ COPY source /app/source
 
 COPY static /app/static
 
+COPY core /app/core
+
 COPY *.py /app/
 
 WORKDIR /app

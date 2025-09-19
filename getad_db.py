@@ -1,8 +1,10 @@
+import core.logger
+import core.configs
+import about
 import os, json
 import time
 from datetime import datetime, timedelta, date
 from pfb import ftp_connect
-from logger import log_console_out, exception_handler, create_confgi_ini, read_config_ini, config_path, db_path
 from flask import Flask, render_template, request, jsonify
 import sqlite3
 import multiprocessing
@@ -16,7 +18,7 @@ from flask import make_response
 import configparser
 import threading
 
-config = read_config_ini(config_path)
+config = core.configs.read_config_ini(about.config_path)
 try: port = int(config.getint("webserver", "port", fallback=None))
 except Exception: port = 30005
 
@@ -28,6 +30,8 @@ server_process = None
 def crash_server():
     time.sleep(5)
     global server_process
+    global clients_update_process
+
     if server_process:
         server_process.terminate()
         server_process.join(timeout=5)  # Ждём максимум 5 секунд
@@ -86,7 +90,7 @@ def requires_auth_admin(f):
 def get_data_pas_fiscals():
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
         dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
 
         connection = sqlite3.connect(format_db_path)
@@ -120,15 +124,14 @@ def get_data_pas_fiscals():
 
         connection.close()
         return modified_data, columns
-    except Exception as e:
-        log_console_out("Error: при чтении таблицы 'pos_fiscals' произошло исключение", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("При чтении таблицы 'pos_fiscals' произошло исключение", exc_info=True)
 
 
 def only_pos():
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
 
         connection = sqlite3.connect(format_db_path)
         cursor = connection.cursor()
@@ -138,14 +141,13 @@ def only_pos():
         columns = [column[1] for column in cursor.fetchall()]  # Получаем названия столбцов
         connection.close()
         return data, columns
-    except Exception as e:
-        log_console_out("Error: при чтении таблицы 'pos_not_fiscals' произошло исключение", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("При чтении таблицы 'pos_not_fiscals' произошло исключение", exc_info=True)
 
 def search_dont_update(field):
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
 
         if request.method == 'POST':
             search_query = request.form['search_query']
@@ -187,9 +189,8 @@ def search_dont_update(field):
                 modified_row.append(is_expired)
             connection.close()
             return search_query, modified_data, columns
-    except Exception as e:
-        log_console_out("Error: не удалось сделать посиковый запрос", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Не удалось сделать посиковый запрос", exc_info=True)
 
 def get_default_dates():
     try:
@@ -201,9 +202,8 @@ def get_default_dates():
             next_month = next_month.replace(month=today.month + 1)
         last_day = next_month.replace(day=calendar.monthrange(next_month.year, next_month.month)[1])
         return today.strftime('%Y-%m-%d'), last_day.strftime('%Y-%m-%d')
-    except Exception as e:
-        log_console_out("Error: не установить дефолтный диапозон дат", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Error: не установить дефолтный диапозон дат", exc_info=True)
 
 def if_show_fn_to_date(date_string, dont_valid_fn):
     try:
@@ -219,16 +219,15 @@ def if_show_fn_to_date(date_string, dont_valid_fn):
         # Сравниваем и выводим результат
         result = input_date_plus >= current_date
         return result
-    except Exception as e:
-        log_console_out(f"Error: не удалось вычислить разницу между текущей датой и {date_string}", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error(f"Не удалось вычислить разницу между текущей датой и {date_string}", exc_info=True)
 
 def get_expire_fn():
     try:
         dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
 
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
         conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -257,11 +256,19 @@ def get_expire_fn():
         cursor.execute('SELECT serialNumber FROM fn_sale_task')
         marked_records = {row[0] for row in cursor.fetchall()}
 
-        # Добавляем v_time в SQL запрос
         base_query = """
-            SELECT serialNumber, RNM, fn_serial, organizationName, INN, 
-                   date(dateTime_end) as dateTime_end, [current_time], [v_time]
+            SELECT pos_fiscals.serialNumber, 
+                   clients.serverName as client,
+                   pos_fiscals.RNM, 
+                   pos_fiscals.fn_serial, 
+                   pos_fiscals.organizationName, 
+                   pos_fiscals.INN, 
+                   date(pos_fiscals.dateTime_end) as dateTime_end,
+                   pos_fiscals.current_time, 
+                   pos_fiscals.v_time,
+                   pos_fiscals.url_rms
             FROM pos_fiscals 
+            LEFT JOIN clients ON pos_fiscals.url_rms = clients.url_rms
             WHERE date(dateTime_end) >= date(?) AND date(dateTime_end) <= date(?)
         """
 
@@ -276,8 +283,8 @@ def get_expire_fn():
         records = []
         for row in rows:
             record = dict(
-                zip(['serialNumber', 'RNM', 'fn_serial', 'organizationName', 'INN',
-                     'dateTime_end', 'current_time', 'v_time'], row))
+                zip(['serialNumber', 'client', 'RNM', 'fn_serial', 'organizationName', 'INN',
+                     'dateTime_end', 'current_time', 'v_time', 'url_rms'], row))
 
             # Определяем, какое время использовать
             time_to_check = record['v_time'] if record['v_time'] not in (None, '', 'None') else record['current_time']
@@ -294,9 +301,8 @@ def get_expire_fn():
         conn.close()
 
         return records, start_date, end_date, show_marked_only
-    except Exception as e:
-        log_console_out("Error: неожиданное исключение при запросе к заканчивающимся ФН", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Неожиданное исключение при запросе к заканчивающимся ФН", exc_info=True)
 
 
 @app.route('/')
@@ -329,9 +335,8 @@ def download_license(index):
         response.headers['Content-Disposition'] = 'attachment; filename=license.json'
         response.headers['Content-Type'] = 'text/plain'
         return response
-    except Exception as e:
-        log_console_out("Error: не удалось сохранить данные о лицензиях", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Не удалось сохранить данные о лицензиях", exc_info=True)
 
 @app.route('/onlypos')
 @requires_auth
@@ -345,7 +350,7 @@ def pos():
 def search():
     try:
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
 
         if request.method == 'POST':
             search_query = request.form['search_query']
@@ -394,9 +399,8 @@ def search():
             return render_template('search.html', search_query=search_query,
                                    search_results=modified_data, columns=columns,
                                    default_visible_columns=default_visible_columns, enumerate=enumerate)
-    except Exception as e:
-        log_console_out("Error: не удалось сделать поисковый запрос", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Не удалось сделать поисковый запрос", exc_info=True)
 
 
 @app.route('/dont-update', methods=['GET', 'POST'])
@@ -434,8 +438,7 @@ def del_fr():
             json_name = request.form['search_query']
             results.extend(delete_fr(json_name))  # Добавляем результаты в массив
     except Exception as e:
-        log_console_out("Error: не удалось удалить запись о ФР из БД", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+        core.logger.web_server.error("Не удалось удалить запись о ФР из БД", exc_info=True)
         results.append("Ошибка: не удалось удалить запись о ФР из БД")
 
     return jsonify(results)  # Возвращаем массив строк
@@ -461,7 +464,7 @@ def toggle_task():
         checked = request.form.get('checked') == 'true'
 
         dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = db_path.format(dbname=dbname)
+        format_db_path = about.db_path.format(dbname=dbname)
         conn = sqlite3.connect(format_db_path)
         cursor = conn.cursor()
 
@@ -477,9 +480,9 @@ def toggle_task():
             return jsonify({'status': 'error', 'message': str(e)})
         finally:
             conn.close()
-    except Exception as e:
-        log_console_out("Error: неожиданное исключение при проверке ФР, на которые заведены задачи", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error(
+            "Неожиданное исключение при проверке ФР, на которые заведены задачи", exc_info=True)
 
 @app.route('/settings')
 @requires_auth_admin
@@ -519,22 +522,21 @@ def settings():
                     })
 
         # Читаем конфигурацию
-        config = read_config_ini(config_path)
+        config = core.configs.read_config_ini(about.config_path)
 
         return render_template('settings.html', config=config, files=files_and_dirs)
-    except Exception as e:
-        log_console_out("Error: не удалось открыть страницу настроек", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+    except Exception:
+        core.logger.web_server.error("Не удалось открыть страницу настроек", exc_info=True)
 
 
 @app.route('/download_file/<path:filename>')
 @requires_auth_admin
 def download_file(filename):
     try:
-        return send_from_directory('source', filename, as_attachment=True)
-    except Exception as e:
-        log_console_out(f"Error: не удалось скачать файл {filename}", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+        normalized_filename = filename.replace('\\', '/')
+        return send_from_directory('source', normalized_filename, as_attachment=True)
+    except Exception:
+        core.logger.web_server.error(f"Не удалось скачать файл {filename}", exc_info=True)
         return "Ошибка при скачивании файла", 404
 
 
@@ -553,7 +555,7 @@ def save_settings():
                 config.set(section, option, str(value))
 
         # Сохраняем в файл
-        with open(config_path, 'w') as configfile:
+        with open(about.config_path, 'w') as configfile:
             config.write(configfile)
 
         shutdown_thread = threading.Thread(target=crash_server)
@@ -561,8 +563,36 @@ def save_settings():
         shutdown_thread.start()
         return jsonify({'success': True})
     except Exception as e:
-        log_console_out("Error: не удалось сохранить настройки", "webs")
-        exception_handler(type(e), e, e.__traceback__, "webs")
+        core.logger.web_server.error("Не удалось сохранить настройки", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/update_client_name', methods=['POST'])
+@requires_auth
+def update_client_name():
+    try:
+        data = request.get_json()
+        url_rms = data['url_rms']
+        server_name = data['server_name']
+
+        dbname = config.get("db-update", "db-name", fallback=None)
+        format_db_path = about.db_path.format(dbname=dbname)
+
+        conn = sqlite3.connect(format_db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE clients 
+            SET serverName = ?, manual_edit = 1 
+            WHERE url_rms = ?
+        ''', (server_name, url_rms))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        core.logger.web_server.error("Ошибка при обновлении имени клиента", exc_info=True)
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/logout')
@@ -573,10 +603,11 @@ def logout():
 
 
 if __name__ == "__main__":
-    if not os.path.exists(config_path):
-        create_confgi_ini()
+    if not os.path.exists(about.config_path):
+        core.configs.create_confgi_ini()
 
     server_process = multiprocessing.Process(target=ftp_connect)
     server_process.daemon = True
     server_process.start()
+
     webserver()

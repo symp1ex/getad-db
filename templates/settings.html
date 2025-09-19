@@ -295,6 +295,16 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
+        .form-control {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            width: 51.6%;
+            background-color: white;
+            color: black;
+            transition: border-color 0.3s ease;
+        }
+
         .logout-icon {
             position: absolute;
             top: 50%;
@@ -407,6 +417,16 @@
             <form id="settingsForm">
                 <div class="settings-group">
                     <h3>Глобальные настройки</h3>
+                    <div class="setting-item">
+                        <label for="global.log-level">Уровень логирования</label>
+                        <select class="form-control" name="global.log-level" id="global.log-level">
+                            <option value="debug" {% if config.get('global', 'log-level') == 'debug' %}selected{% endif %}>DEBUG</option>
+                            <option value="info" {% if config.get('global', 'log-level') == 'info' %}selected{% endif %}>INFO</option>
+                            <option value="warning" {% if config.get('global', 'log-level') == 'warning' %}selected{% endif %}>WARNING</option>
+                            <option value="error" {% if config.get('global', 'log-level') == 'error' %}selected{% endif %}>ERROR</option>
+                            <option value="critical" {% if config.get('global', 'log-level') == 'critical' %}selected{% endif %}>CRITICAL</option>
+                        </select>
+                    </div>
                     <div class="setting-item">
                         <label for="logs-autoclear-days">Автоудаление логов (дней)</label>
                         <input type="number" id="logs-autoclear-days" name="global.logs-autoclear-days"
