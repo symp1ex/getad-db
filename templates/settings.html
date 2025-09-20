@@ -287,6 +287,24 @@
             margin-left: 10px; /* Отступ от label */
         }
 
+        .setting-item-checkbox {
+            display: flex;
+            align-items: center;
+        }
+
+        .setting-item-checkbox label {
+            flex: 1;
+            margin-right: 0;
+        }
+
+        .setting-item-checkbox input[type="checkbox"] {
+            width: auto;
+            margin-left: 0;
+            margin-right: auto;
+            /* Это создаст одинаковое выравнивание с полями ввода ниже */
+            margin-right: calc(51.35% - 13px); /* 13px - примерная ширина чекбокса */
+        }
+
         .settings-group {
             background-color: white;
             padding: 20px;
@@ -464,6 +482,51 @@
                 </div>
 
                 <div class="settings-group">
+                    <h3>Настройки базы данных</h3>
+                    <div class="setting-item setting-item-checkbox">
+                        <label for="reference">Эталон</label>
+                        <input type="checkbox" id="reference" name="db-update.reference" 
+                            {% if config['db-update']['reference'] == '1' %}checked{% endif %}
+                            value="1">
+                    </div>
+                    <div class="setting-item">
+                        <label for="db-name">Имя базы данных</label>
+                        <input type="text" id="db-name" name="db-update.db-name"
+                               value="{{ config['db-update']['db-name'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="host">Адрес</label>
+                        <input type="text" id="host" name="db-update.host"
+                               value="{{ config['db-update']['host'] }}">
+                    </div>    
+                    <div class="setting-item">
+                        <label for="port">Порт</label>
+                        <input type="number" id="port" name="db-update.port"
+                               value="{{ config['db-update']['port'] }}">
+                    </div>   
+                    <div class="setting-item">
+                        <label for="user">Имя пользователя</label>
+                        <input type="text" id="user" name="db-update.user"
+                               value="{{ config['db-update']['user'] }}">
+                    </div>   
+                    <div class="setting-item">
+                        <label for="password">Пароль</label>
+                        <input type="password" id="password" name="db-update.password"
+                               value="{{ config['db-update']['password'] }}">
+                    </div>                                                                        
+                    <div class="setting-item">
+                        <label for="dbupdate-period-sec">Период обновления (сек)</label>
+                        <input type="number" id="dbupdate-period-sec" name="db-update.dbupdate-period-sec"
+                               value="{{ config['db-update']['dbupdate-period-sec'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="day_filter_expire">Фильтрация просроченных записей (дней)</label>
+                        <input type="number" id="day_filter_expire" name="db-update.day_filter_expire"
+                               value="{{ config['db-update']['day_filter_expire'] }}">
+                    </div>
+                </div>
+
+                <div class="settings-group">
                     <h3>Настройки FTP</h3>
                     <div class="setting-item">
                         <label for="ftpHost">FTP хост</label>
@@ -479,25 +542,6 @@
                         <label for="ftpPass">FTP пароль</label>
                         <input type="password" id="ftpPass" name="ftp-connect.ftpPass"
                                value="{{ config['ftp-connect']['ftpPass'] }}">
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>Настройки базы данных</h3>
-                    <div class="setting-item">
-                        <label for="db-name">Имя базы данных</label>
-                        <input type="text" id="db-name" name="db-update.db-name"
-                               value="{{ config['db-update']['db-name'] }}">
-                    </div>
-                    <div class="setting-item">
-                        <label for="dbupdate-period-sec">Период обновления (сек)</label>
-                        <input type="number" id="dbupdate-period-sec" name="db-update.dbupdate-period-sec"
-                               value="{{ config['db-update']['dbupdate-period-sec'] }}">
-                    </div>
-                    <div class="setting-item">
-                        <label for="day_filter_expire">Фильтрация просроченных записей (дней)</label>
-                        <input type="number" id="day_filter_expire" name="db-update.day_filter_expire"
-                               value="{{ config['db-update']['day_filter_expire'] }}">
                     </div>
                 </div>
 
@@ -590,6 +634,11 @@
 
             const formData = new FormData(this);
             const settings = {};
+
+            // Добавим проверку для чек-бокса reference
+            if (!formData.has('db-update.reference')) {
+                formData.append('db-update.reference', '0');
+            }
 
             formData.forEach((value, key) => {
                 const [section, option] = key.split('.');

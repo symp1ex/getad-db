@@ -11,8 +11,8 @@ def create_confgi_ini():
         # Создание секций
         config['global'] = {}
         config['webserver'] = {}
-        config['ftp-connect'] = {}
         config['db-update'] = {}
+        config['ftp-connect'] = {}
 
         # Запись значения в секцию и ключ
         config['global']['log-level'] = 'info'
@@ -22,12 +22,17 @@ def create_confgi_ini():
         config['webserver']['pass'] = '1234'
         config['webserver']['admin'] = 'admin'
         config['webserver']['admin_pass'] = '4321'
+        config['db-update']['reference'] = '0'
+        config['db-update']['db-name'] = 'getad'
+        config['db-update']['host'] = ''
+        config['db-update']['port'] = ''
+        config['db-update']['user'] = ''
+        config['db-update']['password'] = ''
+        config['db-update']['dbupdate-period-sec'] = '900'
+        config['db-update']['day_filter_expire'] = '5'
         config['ftp-connect']['ftpHost'] = ''
         config['ftp-connect']['ftpUser'] = ''
         config['ftp-connect']['ftpPass'] = ''
-        config['db-update']['db-name'] = 'dbpos'
-        config['db-update']['dbupdate-period-sec'] = '900'
-        config['db-update']['day_filter_expire'] = '5'
 
         # Запись изменений в файл
         with open(about.config_path, 'w') as configfile:

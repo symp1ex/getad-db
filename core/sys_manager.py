@@ -5,6 +5,8 @@ import os
 import json
 import calendar
 from datetime import date, datetime, timedelta
+import psycopg2
+import psycopg2.extras
 
 class ResourceManagement:
     def __init__(self):
@@ -63,3 +65,87 @@ class ResourceManagement:
         except Exception:
             core.logger.web_server.error(f"Не удалось вычислить разницу между текущей датой и {date_string}",
                                          exc_info=True)
+
+class DatabaseContextManager(ResourceManagement):
+    def __init__(self):
+        super().__init__()
+        self.dbname = self.config.get("db-update", "db-name", fallback="getad")
+        self.host = self.config.get("db-update", "host", fallback="localhost")
+        self.port = self.config.get("db-update", "port", fallback="5432")
+        self.user = self.config.get("db-update", "user", fallback="postgres")
+        self.password = self.config.get("db-update", "password", fallback="")
+        self.conn = None
+        self.cursor = None
+
+    def __enter__(self):
+        try:
+            # Пытаемся подключиться к базе данных
+            try:
+                self.conn = psycopg2.connect(
+                    dbname=self.dbname,
+                    user=self.user,
+                    password=self.password,
+                    host=self.host,
+                    port=self.port
+                )
+                self.cursor = self.conn.cursor()
+            except psycopg2.OperationalError as e:
+                # Проверяем, что ошибка связана с отсутствием базы данных
+                if "database" in str(e) and "does not exist" in str(e):
+                    # Подключаемся к базе postgres (системная база, всегда существует)
+                    temp_conn = psycopg2.connect(
+                        dbname='postgres',
+                        user=self.user,
+                        password=self.password,
+                        host=self.host,
+                        port=self.port
+                    )
+                    temp_conn.autocommit = True  # Необходимо для создания БД
+                    temp_cursor = temp_conn.cursor()
+
+                    # Создаем новую базу данных
+                    temp_cursor.execute(f'CREATE DATABASE "{self.dbname}"')
+
+                    # Закрываем временное соединение
+                    temp_cursor.close()
+                    temp_conn.close()
+
+                    core.logger.db_service.info(f"Создана новая база данных: {self.dbname}")
+
+                    # Теперь подключаемся к только что созданной базе
+                    self.conn = psycopg2.connect(
+                        dbname=self.dbname,
+                        user=self.user,
+                        password=self.password,
+                        host=self.host,
+                        port=self.port
+                    )
+                    self.cursor = self.conn.cursor()
+                else:
+                    # Если ошибка не связана с отсутствием БД, пробрасываем её дальше
+                    raise
+
+            return self
+        except Exception:
+            core.logger.db_service.error(
+                "Не удалось подключиться к базе данных", exc_info=True)
+            time.sleep(5)
+            raise
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type:
+            # Если произошло исключение, откатываем изменения
+            if self.conn:
+                try: self.conn.rollback()
+                except: pass
+        else:
+            # Если всё в порядке, сохраняем изменения
+            if self.conn:
+                try: self.conn.commit()
+                except: pass
+
+        # Закрываем соединение в любом случае
+        if self.conn:
+            try: self.conn.close()
+            except: pass
+

@@ -1,7 +1,7 @@
 import core.logger
 import core.configs
 from core.connectors import FtpContextManager
-from core.dbmanagment import DatabaseContextManager
+from core.sys_manager import DatabaseContextManager
 import about
 from datetime import datetime
 import threading
@@ -39,7 +39,7 @@ def delete_record_by_serial_number(json_name):
     try:
         with DatabaseContextManager() as db:
             # Выполнение запроса на удаление
-            db.cursor.execute("DELETE FROM pos_fiscals WHERE serialNumber = ?", (json_name,))
+            db.cursor.execute('DELETE FROM pos_fiscals WHERE "serialNumber" = %s', (json_name,))
 
             # Проверка количества затронутых строк
             if db.cursor.rowcount > 0:
@@ -53,7 +53,7 @@ def delete_record_by_serial_number(json_name):
                     messages, f"Запись с serialNumber = '{json_name}' в таблице 'pos_fiscals' не найдена")
 
                 filename = f"{json_name}.json"
-                db.cursor.execute("DELETE FROM pos_not_fiscals WHERE filename = ?", (filename,))
+                db.cursor.execute('DELETE FROM pos_not_fiscals WHERE "filename" = %s', (filename,))
                 if db.cursor.rowcount > 0:
                     core.logger.web_server.info(
                         f"Запись с fileName = '{filename}' из таблицы 'pos_not_fiscals' успешно удалена")

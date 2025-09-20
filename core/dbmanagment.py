@@ -2,191 +2,201 @@ import core.sys_manager
 import core.logger
 import core.configs
 import core.connectors
-import about
-from datetime import datetime, timedelta
 from flask import request
 import os
 import json
-import sqlite3
 import time
+import threading
 
 iikorms = core.connectors.IikoRms()
 
-class DatabaseContextManager(core.sys_manager.ResourceManagement):
-    def __init__(self):
-        super().__init__()
-        self.dbname = self.config.get("db-update", "db-name", fallback=None)
-        self.format_db_path = about.db_path.format(dbname=self.dbname)
-        self.conn = None
-        self.cursor = None
-
-    def __enter__(self):
-        try:
-            self.conn = sqlite3.connect(self.format_db_path)
-            self.cursor = self.conn.cursor()
-            return self
-        except Exception:
-            core.logger.db_service.error(
-                "Не удалось подключиться к базе данных", exc_info=True)
-            raise
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type:
-            # Если произошло исключение, откатываем изменения
-            if self.conn:
-                try: self.conn.rollback()
-                except: pass
-        else:
-            # Если всё в порядке, сохраняем изменения
-            if self.conn:
-                try: self.conn.commit()
-                except: pass
-
-        # Закрываем соединение в любом случае
-        if self.conn:
-            try: self.conn.close()
-            except: pass
-
-class DbUpdate(DatabaseContextManager):
+class DbUpdate(core.sys_manager.DatabaseContextManager):
     def __init__(self):
         super().__init__()
         self.dbupdate_period = int(self.config.get("db-update", "dbupdate-period-sec", fallback=None))
+        self.reference_flaq = int(self.config.get("db-update", "reference", fallback=None))
 
     def pos_tables_update(self):
         clients_update = 0
 
-        while True:
-            core.logger.db_service.info("Начато обновление базы ФР")
+        if self.reference_flaq == True:
+            while True:
+                core.logger.db_service.info("Начато обновление базы ККТ")
 
-            try:
-                with core.connectors.FtpContextManager() as ftp:
-                    files = []
-                    ftp.retrlines('LIST', lambda x: files.append(x.split()))
-                    json_files = [f[8] for f in files if f[8].endswith('.json')]
+                try:
+                    with core.connectors.FtpContextManager() as ftp:
+                        files = []
+                        ftp.retrlines('LIST', lambda x: files.append(x.split()))
+                        json_files = [f[8] for f in files if f[8].endswith('.json')]
 
-                    # Создание временной директории для сохранения файлов
-                    temp_dir = 'temp_files'
-                    if not os.path.exists(temp_dir):
-                        os.makedirs(temp_dir)
+                        # Создание временной директории для сохранения файлов
+                        temp_dir = 'temp_files'
+                        if not os.path.exists(temp_dir):
+                            os.makedirs(temp_dir)
 
-                    # Скачивание файлов JSON на локальный компьютер
-                    for filename in json_files:
-                        local_filename = os.path.join(temp_dir, filename)
-                        with open(local_filename, 'wb') as file:
-                            ftp.retrbinary('RETR ' + filename, file.write)
-                        with open(local_filename, 'r', encoding='utf-8') as file:
-                            try:
-                                json_data = json.load(file)
-                                if "serialNumber" in json_data:
-                                    self.save_fiscals({json_data["serialNumber"]: json_data})
-                                else:
-                                    # Если ключ "serialNumber" отсутствует, сохраняем JSON в отдельную таблицу
-                                    self.save_not_fiscal(json_data, filename)
-                            except json.JSONDecodeError:
-                                core.logger.db_service.error(
-                                    f"Файл {filename} содержит некорректный JSON, пропускаем", exc_info=True)
-                        # Удаление временных файлов после чтения данных
-                        os.remove(local_filename)
+                        # Скачивание файлов JSON на локальный компьютер
+                        for filename in json_files:
+                            local_filename = os.path.join(temp_dir, filename)
+                            with open(local_filename, 'wb') as file:
+                                ftp.retrbinary('RETR ' + filename, file.write)
+                            with open(local_filename, 'r', encoding='utf-8') as file:
+                                try:
+                                    json_data = json.load(file)
+                                    if "serialNumber" in json_data:
+                                        self.save_fiscals({json_data["serialNumber"]: json_data})
+                                    else:
+                                        # Если ключ "serialNumber" отсутствует, сохраняем JSON в отдельную таблицу
+                                        self.save_not_fiscal(json_data, filename)
+                                except json.JSONDecodeError:
+                                    core.logger.db_service.error(
+                                        f"Файл {filename} содержит некорректный JSON, пропускаем", exc_info=True)
+                            # Удаление временных файлов после чтения данных
+                            os.remove(local_filename)
 
-                self.clean_fn_sale_task()
+                    self.clean_fn_sale_task()
 
-                if clients_update == 0:
-                    iikorms.update_clients_info()
-                    clients_update = 1
+                    if clients_update == 0:
+                        update_clients_info_thread = threading.Thread(target=iikorms.update_clients_info, daemon=True)
+                        update_clients_info_thread.start()
+                        clients_update = 1
 
-                core.logger.db_service.info("Обновление базы ФР завершено")
-                core.logger.db_service.info(
-                    f"Следущее обновление будет произведено через ({self.dbupdate_period}) секунд")
+                    core.logger.db_service.info("Обновление базы ФР завершено")
+                    core.logger.db_service.info(
+                        f"Следующее обновление будет произведено через ({self.dbupdate_period}) секунд")
 
-                time.sleep(self.dbupdate_period)
+                    time.sleep(self.dbupdate_period)
 
-            except Exception:
-                core.logger.db_service.error(f"Не удалось загрузить файл c FTP", exc_info=True)
-                core.logger.db_service.info(
-                    f"Следущая попытка обновления будет произведена через ({self.dbupdate_period}) секунд")
-                time.sleep(self.dbupdate_period)
-                continue
+                except Exception:
+                    core.logger.db_service.error(f"Не удалось загрузить файл c FTP", exc_info=True)
+                    core.logger.db_service.info(
+                        f"Следующая попытка обновления будет произведена через ({self.dbupdate_period}) секунд")
+                    time.sleep(self.dbupdate_period)
+                    continue
 
     def save_not_fiscal(self, json_data, filename):
         try:
-            with DatabaseContextManager() as db:
+            with core.sys_manager.DatabaseContextManager() as db:
                 # Получение списка уникальных ключей JSON для создания столбцов
                 json_keys = json_data.keys()
 
                 # Создание таблицы для нефискальных JSON-файлов, если её ещё нет
                 db.cursor.execute('''CREATE TABLE IF NOT EXISTS pos_not_fiscals (
-                                    filename TEXT PRIMARY KEY
-                                )''')
+                                    "filename" TEXT PRIMARY KEY
+                                );''')
 
                 # Получение существующих столбцов из таблицы
-                db.cursor.execute('PRAGMA table_info(pos_not_fiscals)')
-                existing_columns = {row[1] for row in db.cursor.fetchall()}
+                db.cursor.execute('''
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'pos_not_fiscals'
+                ''')
+                existing_columns = {row[0].lower() for row in db.cursor.fetchall()}
 
                 # Проверка и добавление новых столбцов
                 for key in json_keys:
-                    if key not in existing_columns:
-                        db.cursor.execute(f'''ALTER TABLE pos_not_fiscals ADD COLUMN {key} TEXT''')
-                        existing_columns.add(key)
+                    if key.lower() not in existing_columns:
+                        db.cursor.execute(f'''ALTER TABLE pos_not_fiscals ADD COLUMN "{key}" TEXT''')
+                        existing_columns.add(key.lower())
 
                 # Формирование значений для вставки
                 values = []
                 columns = []
-                for key in existing_columns:
-                    if key != 'filename':  # Пропускаем filename, так как он обрабатывается отдельно
-                        columns.append(key)
+                original_columns = []
+
+                for key in json_keys:
+                    if key.lower() != 'filename':  # Пропускаем filename, так как он обрабатывается отдельно
+                        columns.append(f'"{key}"')
+                        original_columns.append(key)
                         value = json_data.get(key, '')
                         if isinstance(value, dict):
                             value = json.dumps(value, ensure_ascii=False)
                         values.append(value)
 
                 # Формирование SQL запроса
-                placeholders = ', '.join(['?'] * len(values))
+                placeholders = ', '.join(['%s'] * len(values))  # В PostgreSQL используем %s вместо ?
                 columns_str = ', '.join(columns)
 
-                # Вставка данных
-                db.cursor.execute(
-                    f'''INSERT OR REPLACE INTO pos_not_fiscals (filename, {columns_str}) 
-                        VALUES (?, {placeholders})''',
-                    (filename, *values)
-                )
+                # Вставка данных (используем ON CONFLICT вместо INSERT OR REPLACE)
+                if columns:  # Проверяем, что у нас есть столбцы для вставки
+                    db.cursor.execute(
+                        f'''INSERT INTO pos_not_fiscals ("filename", {columns_str})
+                            VALUES (%s, {placeholders})
+                            ON CONFLICT ("filename") 
+                            DO UPDATE SET {', '.join([f'"{col}" = EXCLUDED."{col}"' for col in original_columns])}''',
+                        (filename, *values)
+                    )
+                else:
+                    # Если нет дополнительных столбцов, просто вставляем filename
+                    db.cursor.execute(
+                        f'''INSERT INTO pos_not_fiscals ("filename")
+                            VALUES (%s)
+                            ON CONFLICT ("filename") DO NOTHING''',
+                        (filename,)
+                    )
+                core.logger.db_service.debug(f"Запись '{filename}' успешно добавлена в базу")
         except Exception:
             core.logger.db_service.error(
                 f"Не удалось сохранить JSON-файл {filename} в таблицу [pos_not_fiscals]", exc_info=True)
 
     def save_fiscals(self, data):
         try:
-            with DatabaseContextManager() as db:
+            with core.sys_manager.DatabaseContextManager() as db:
                 # Создание таблицы, если она не существует
                 db.cursor.execute('''CREATE TABLE IF NOT EXISTS pos_fiscals (
-                                    serialNumber TEXT PRIMARY KEY
+                                    "serialNumber" TEXT PRIMARY KEY
                                 )''')
 
                 # Получение существующих столбцов из таблицы
-                db.cursor.execute('PRAGMA table_info(pos_fiscals)')
-                existing_columns = {row[1] for row in db.cursor.fetchall()}
+                db.cursor.execute('''
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'pos_fiscals'
+                ''')
+                existing_columns = {row[0].lower() for row in db.cursor.fetchall()}  # Преобразуем в нижний регистр
 
                 try:
                     # Вставка данных
                     for filename, json_data in data.items():
                         # Проверка и добавление новых столбцов
                         for key, value in json_data.items():
-                            if key not in existing_columns:
-                                db.cursor.execute(f'''ALTER TABLE pos_fiscals ADD COLUMN {key} TEXT''')
-                                existing_columns.add(key)
+                            if key.lower() not in existing_columns:
+                                db.cursor.execute(f'''ALTER TABLE pos_fiscals ADD COLUMN "{key}" TEXT''')
+                                existing_columns.add(key.lower())
 
                         # Формирование значений для вставки
                         values = []
-                        for col in existing_columns:
-                            value = json_data.get(col, '')
-                            if isinstance(value, dict):
-                                value = json.dumps(value, ensure_ascii=False)  # Сериализация словаря в JSON-строку
-                            values.append(value)
+                        columns = []
+                        original_columns = []  # Сохраняем оригинальные названия столбцов
 
-                        placeholders = ', '.join(['?'] * len(values))
-                        # Используем оператор INSERT OR REPLACE для обновления текущих полей при совпадении первичного ключа
-                        db.cursor.execute(
-                            f'''INSERT OR REPLACE INTO pos_fiscals (serialNumber, {', '.join(existing_columns)}) VALUES (?, {placeholders})''',
-                            (filename, *values))
+                        for key, value in json_data.items():
+                            if key.lower() != 'serialnumber':  # Пропускаем serialNumber, обрабатываем отдельно
+                                columns.append(f'"{key}"')  # Заключаем имя столбца в кавычки
+                                original_columns.append(key)  # Сохраняем оригинальное имя для получения значений
+                                value = json_data.get(key, '')
+                                if isinstance(value, dict):
+                                    value = json.dumps(value, ensure_ascii=False)
+                                values.append(value)
+
+                        # Формирование SQL запроса
+                        placeholders = ', '.join(['%s'] * len(values))
+                        columns_str = ', '.join(columns)
+
+                        # Используем оператор INSERT с ON CONFLICT для обновления при совпадении первичного ключа
+                        if columns:  # Проверяем, что у нас есть столбцы для вставки
+                            db.cursor.execute(
+                                f'''INSERT INTO pos_fiscals ("serialNumber", {columns_str})
+                                   VALUES (%s, {placeholders})
+                                   ON CONFLICT ("serialNumber") 
+                                   DO UPDATE SET {', '.join([f'"{col}" = EXCLUDED."{col}"' for col in original_columns])}''',
+                                (filename, *values))
+                        else:
+                            # Если нет дополнительных столбцов, просто вставляем serialNumber
+                            db.cursor.execute(
+                                f'''INSERT INTO pos_fiscals ("serialNumber")
+                                   VALUES (%s)
+                                   ON CONFLICT ("serialNumber") DO NOTHING''',
+                                (filename,))
+                    core.logger.db_service.debug(f"Запись '{filename}' успешно добавлена в базу")
                 except Exception:
                     core.logger.db_service.error(f"Файл уже был удалён", exc_info=True)
                     pass
@@ -196,24 +206,24 @@ class DbUpdate(DatabaseContextManager):
 
     def clean_fn_sale_task(self):
         try:
-            with DatabaseContextManager() as db:
+            with core.sys_manager.DatabaseContextManager() as db:
                 db.cursor.execute('''
                     CREATE TABLE IF NOT EXISTS fn_sale_task (
-                        serialNumber TEXT PRIMARY KEY,
-                        fn_serial TEXT
+                        "serialNumber" TEXT PRIMARY KEY,
+                        "fn_serial" TEXT
                     )
                 ''')
 
                 # Получаем все записи из fn_sale_task
-                db.cursor.execute('SELECT serialNumber, fn_serial FROM fn_sale_task')
+                db.cursor.execute('SELECT "serialNumber", "fn_serial" FROM fn_sale_task')
                 task_records = db.cursor.fetchall()
 
                 for task_serial, task_fn in task_records:
                     # Ищем соответствующую запись в pos_fiscals
                     db.cursor.execute('''
-                        SELECT fn_serial 
+                        SELECT "fn_serial"
                         FROM pos_fiscals 
-                        WHERE serialNumber = ?
+                        WHERE "serialNumber" = %s
                     ''', (task_serial,))
 
                     pos_record = db.cursor.fetchone()
@@ -224,7 +234,7 @@ class DbUpdate(DatabaseContextManager):
                     if pos_record is None or pos_record[0] != task_fn:
                         db.cursor.execute('''
                             DELETE FROM fn_sale_task 
-                            WHERE serialNumber = ?
+                            WHERE "serialNumber" = %s
                         ''', (task_serial,))
                         core.logger.db_service.info(
                             f"Удалена неактуальная запись из fn_sale_task: serialNumber={task_serial}, fn_serial={task_fn}")
@@ -235,37 +245,50 @@ class DbUpdate(DatabaseContextManager):
             core.logger.db_service.error("Не удалось выполнить очистку fn_sale_task", exc_info=True)
 
 
-class DbQueries(DatabaseContextManager):
+class DbQueries(core.sys_manager.DatabaseContextManager):
     def __init__(self):
         super().__init__()
         self.dont_valid_fn = int(self.config.get("db-update", "day_filter_expire", fallback=5))
 
     def get_data_pos_fiscals(self):
         try:
-            with DatabaseContextManager() as db:
-                db.cursor.execute("SELECT * FROM pos_fiscals")
+            with core.sys_manager.DatabaseContextManager() as db:
+                db.cursor.execute('SELECT * FROM pos_fiscals')
                 data = db.cursor.fetchall()
-                db.cursor.execute("PRAGMA table_info(pos_fiscals)")
-                columns = [column[1] for column in db.cursor.fetchall()]
+
+                # Получаем названия столбцов из информационной схемы PostgreSQL
+                db.cursor.execute('''
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'pos_fiscals'
+                    ORDER BY ordinal_position
+                ''')
+                columns = [column[0] for column in db.cursor.fetchall()]
 
                 # Создаем новый список для данных с дополнительной информацией об устаревании
                 modified_data = []
                 for row in data:
+                    row_dict = dict(zip(columns, row))  # Преобразуем строку в словарь для удобства доступа
                     modified_row = list(row)
-                    licenses_data_index = columns.index('licenses')
-                    current_time_index = columns.index('current_time')
-                    v_time_index = columns.index('v_time')
+
+                    # Определяем индексы важных столбцов
+                    licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
+                    current_time_index = columns.index('current_time') if 'current_time' in columns else -1
+                    v_time_index = columns.index('v_time') if 'v_time' in columns else -1
 
                     # Обработка licenses
-                    licenses_data = row[licenses_data_index]
-                    if licenses_data:
-                        modified_row[licenses_data_index] = licenses_data
+                    if licenses_data_index >= 0 and row[licenses_data_index]:
+                        modified_row[licenses_data_index] = row[licenses_data_index]
 
                     # Проверка устаревания записи
-                    time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                        current_time_index]
-                    is_expired = not self.if_show_fn_to_date(
-                        time_to_check, self.dont_valid_fn) if time_to_check else False
+                    time_to_check = None
+                    if v_time_index >= 0 and current_time_index >= 0:
+                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
+                            current_time_index]
+
+                    is_expired = False
+                    if time_to_check:
+                        is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
 
                     # Добавляем признак устаревания в строку
                     modified_row.append(is_expired)
@@ -275,90 +298,120 @@ class DbQueries(DatabaseContextManager):
             return modified_data, columns
         except Exception:
             core.logger.db_service.error("При чтении таблицы 'pos_fiscals' произошло исключение", exc_info=True)
+            return [], []
 
     def only_pos(self):
         try:
-            with DatabaseContextManager() as db:
-                db.cursor.execute("SELECT * FROM pos_not_fiscals")
+            with core.sys_manager.DatabaseContextManager() as db:
+                db.cursor.execute('SELECT * FROM pos_not_fiscals')
                 data = db.cursor.fetchall()
-                db.cursor.execute("PRAGMA table_info(pos_not_fiscals)")
-                columns = [column[1] for column in db.cursor.fetchall()]  # Получаем названия столбцов
+
+                # Получаем названия столбцов из информационной схемы PostgreSQL
+                db.cursor.execute('''
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'pos_not_fiscals'
+                    ORDER BY ordinal_position
+                ''')
+                columns = [column[0] for column in db.cursor.fetchall()]
+
             return data, columns
         except Exception:
             core.logger.db_service.error("При чтении таблицы 'pos_not_fiscals' произошло исключение", exc_info=True)
+            return [], []
 
     def search_querie(self):
         try:
             if request.method == 'POST':
                 search_query = request.form['search_query']
 
-                with DatabaseContextManager() as db:
-                    db.cursor.execute("PRAGMA table_info(pos_fiscals)")
-                    columns = [column[1] for column in db.cursor.fetchall()]
+                with core.sys_manager.DatabaseContextManager() as db:
+                    # Получаем названия столбцов из информационной схемы PostgreSQL
+                    db.cursor.execute('''
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'pos_fiscals'
+                        ORDER BY ordinal_position
+                    ''')
+                    columns = [column[0] for column in db.cursor.fetchall()]
 
+                    # Создаем запрос SQL для поиска по всем столбцам
                     query = "SELECT * FROM pos_fiscals WHERE "
-                    for column in columns:
-                        query += f"{column} LIKE '%{search_query}%' OR "
-                    query = query[:-4]
+                    conditions = []
 
-                    db.cursor.execute(query)
+                    for column in columns:
+                        conditions.append(f'"{column}"::TEXT ILIKE %s')
+
+                    # Соединяем условия поиска оператором OR
+                    query += " OR ".join(conditions)
+
+                    # Создаем список параметров для запроса (по одному '%значение%' на каждый столбец)
+                    params = [f'%{search_query}%'] * len(columns)
+
+                    # Выполняем запрос
+                    db.cursor.execute(query, params)
                     search_results = db.cursor.fetchall()
 
                     # Создаем новый список для данных с проверкой на устаревание
                     modified_data = []
                     for row in search_results:
                         modified_row = list(row)
-                        licenses_data_index = columns.index('licenses')
-                        current_time_index = columns.index('current_time')
-                        v_time_index = columns.index('v_time')
+
+                        # Определяем индексы важных столбцов
+                        licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
+                        current_time_index = columns.index('current_time') if 'current_time' in columns else -1
+                        v_time_index = columns.index('v_time') if 'v_time' in columns else -1
 
                         # Обработка licenses
-                        licenses_data = row[licenses_data_index]
-                        if licenses_data:
-                            modified_row[licenses_data_index] = licenses_data
+                        if licenses_data_index >= 0 and row[licenses_data_index]:
+                            modified_row[licenses_data_index] = row[licenses_data_index]
 
                         # Проверка устаревания записи
-                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                            current_time_index]
-                        is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn) if time_to_check else False
+                        time_to_check = None
+                        if v_time_index >= 0 and current_time_index >= 0:
+                            time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
+                                current_time_index]
+
+                        is_expired = False
+                        if time_to_check:
+                            is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
 
                         # Добавляем признак устаревания в строку
                         modified_row.append(is_expired)
 
                         modified_data.append(modified_row)
 
-                default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
-                                           'dateTime_end',
-                                           'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
-                                           'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id',
-                                           'litemanager_id']
+                    default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
+                                               'dateTime_end', 'bootVersion', 'ffdVersion', 'INN', 'attribute_excise',
+                                               'attribute_marked', 'installed_driver', 'url_rms', 'teamviewer_id',
+                                               'anydesk_id', 'litemanager_id']
 
-                return search_query, modified_data, columns, default_visible_columns
+                    return search_query, modified_data, columns, default_visible_columns
+
         except Exception:
             core.logger.db_service.error("Не удалось сделать поисковый запрос", exc_info=True)
 
-
     def get_expire_fn(self):
         try:
-            with DatabaseContextManager() as db:
+            with core.sys_manager.DatabaseContextManager() as db:
                 db.cursor.execute('''
                     CREATE TABLE IF NOT EXISTS fn_sale_task (
-                        serialNumber TEXT PRIMARY KEY,
-                        fn_serial TEXT
+                        "serialNumber" TEXT PRIMARY KEY,
+                        "fn_serial" TEXT
                     )
                 ''')
 
                 # Добавляем создание таблицы clients, если она не существует
                 db.cursor.execute('''
                     CREATE TABLE IF NOT EXISTS clients (
-                        id TEXT PRIMARY KEY,
-                        url_rms TEXT,
-                        INN TEXT,
-                        organizationName TEXT,
-                        serverName TEXT,
-                        version TEXT,
-                        manual_edit INTEGER DEFAULT 0,
-                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        "id" TEXT PRIMARY KEY,
+                        "url_rms" TEXT,
+                        "INN" TEXT,
+                        "organizationName" TEXT,
+                        "serverName" TEXT,
+                        "version" TEXT,
+                        "manual_edit" INTEGER DEFAULT 0,
+                        "last_updated" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
 
@@ -373,30 +426,30 @@ class DbQueries(DatabaseContextManager):
 
             show_marked_only = request.args.get('show_marked_only', 'true') == 'true'
 
-            with DatabaseContextManager() as db:
-                db.cursor.execute('SELECT serialNumber FROM fn_sale_task')
+            with core.sys_manager.DatabaseContextManager() as db:
+                db.cursor.execute('SELECT "serialNumber" FROM fn_sale_task')
                 marked_records = {row[0] for row in db.cursor.fetchall()}
 
                 base_query = """
-                    SELECT pos_fiscals.serialNumber, 
-                           clients.serverName as client,
-                           pos_fiscals.RNM, 
-                           pos_fiscals.fn_serial, 
-                           pos_fiscals.organizationName, 
-                           pos_fiscals.INN, 
-                           date(pos_fiscals.dateTime_end) as dateTime_end,
-                           pos_fiscals.current_time, 
-                           pos_fiscals.v_time,
-                           pos_fiscals.url_rms
+                    SELECT pos_fiscals."serialNumber", 
+                           clients."serverName" as client,
+                           pos_fiscals."RNM", 
+                           pos_fiscals."fn_serial", 
+                           pos_fiscals."organizationName", 
+                           pos_fiscals."INN", 
+                           date(pos_fiscals."dateTime_end") as dateTime_end,
+                           pos_fiscals."current_time", 
+                           pos_fiscals."v_time",
+                           pos_fiscals."url_rms"
                     FROM pos_fiscals 
-                    LEFT JOIN clients ON pos_fiscals.url_rms = clients.url_rms
-                    WHERE date(dateTime_end) >= date(?) AND date(dateTime_end) <= date(?)
+                    LEFT JOIN clients ON pos_fiscals."url_rms" = clients."url_rms"
+                    WHERE date(pos_fiscals."dateTime_end") >= date(%s) AND date(pos_fiscals."dateTime_end") <= date(%s)
                 """
 
                 if not show_marked_only:
-                    base_query += " AND serialNumber NOT IN (SELECT serialNumber FROM fn_sale_task)"
+                    base_query += ' AND pos_fiscals."serialNumber" NOT IN (SELECT "serialNumber" FROM fn_sale_task)'
 
-                base_query += " ORDER BY dateTime_end ASC"
+                base_query += ' ORDER BY pos_fiscals."dateTime_end" ASC'
 
                 db.cursor.execute(base_query, (start_date, end_date))
                 rows = db.cursor.fetchall()
@@ -430,96 +483,113 @@ class DbQueries(DatabaseContextManager):
                 search_query = request.form['search_query']
                 days = int(search_query)
 
-                with DatabaseContextManager() as db:
-                    # Преобразуем текущую дату в формат, который хранится в базе данных
-                    today_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    # Вычисляем дату, которая на days дней меньше текущей даты
-                    past_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+                with core.sys_manager.DatabaseContextManager() as db:
+                    # Получаем названия столбцов из информационной схемы PostgreSQL
+                    db.cursor.execute('''
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'pos_fiscals'
+                        ORDER BY ordinal_position
+                    ''')
+                    columns = [column[0] for column in db.cursor.fetchall()]
 
-                    db.cursor.execute("PRAGMA table_info(pos_fiscals)")  # Получаем названия столбцов из базы данных
-                    columns = [column[1] for column in db.cursor.fetchall()]
+                    # Строим запрос для поиска устаревших записей
+                    # Используем синтаксис PostgreSQL для работы с датами
+                    query = f'''
+                        SELECT * FROM pos_fiscals 
+                        WHERE "{field}"::timestamp < (CURRENT_TIMESTAMP - INTERVAL '{days} days')
+                    '''
 
-                    # Создаем запрос SQL для выборки строк, удовлетворяющих условиям
-                    query = f"SELECT * FROM pos_fiscals WHERE strftime('%s', [{field}]) < strftime('%s', '{past_date}')"
+                    # Выполняем запрос
                     db.cursor.execute(query)
                     search_results = db.cursor.fetchall()
-                    # Создаем новый список для данных с замененными значениями в столбце licenses
+
+                    # Создаем новый список для данных с проверкой на устаревание
                     modified_data = []
                     for row in search_results:
-                        modified_row = list(row)  # Преобразуем кортеж в список
-                        licenses_data_index = columns.index('licenses')
-                        current_time_index = columns.index('current_time')
-                        v_time_index = columns.index('v_time')
+                        modified_row = list(row)
 
-                        licenses_data = row[licenses_data_index]
-                        if licenses_data:  # Если есть данные в столбце licenses
-                            # Замена данных в столбце licenses на ссылку
-                            modified_row[licenses_data_index] = licenses_data
+                        # Определяем индексы важных столбцов
+                        licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
+                        current_time_index = columns.index("current_time") if "current_time" in columns else -1
+                        v_time_index = columns.index('v_time') if 'v_time' in columns else -1
 
-                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                            current_time_index]
-                        is_expired = not self.if_show_fn_to_date(
-                            time_to_check, self.dont_valid_fn) if time_to_check else False
+                        # Обработка licenses
+                        if licenses_data_index >= 0 and row[licenses_data_index]:
+                            modified_row[licenses_data_index] = row[licenses_data_index]
+
+                        # Проверка устаревания записи
+                        time_to_check = None
+                        if v_time_index >= 0 and current_time_index >= 0:
+                            time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
+                                current_time_index]
+
+                        is_expired = False
+                        if time_to_check:
+                            is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
+
+                        # Добавляем признак устаревания в строку
+                        modified_row.append(is_expired)
 
                         modified_data.append(modified_row)
 
-                        modified_row.append(is_expired)
-
-                return search_query, modified_data, columns
+                    return search_query, modified_data, columns
         except Exception:
-            core.logger.db_service.error("Не удалось сделать посиковый запрос", exc_info=True)
+            core.logger.db_service.error("Не удалось сделать поисковый запрос устаревших записей", exc_info=True)
 
     def toggle_task(self, serial_number, fn_serial, checked):
         try:
-            with DatabaseContextManager() as db:
+            with core.sys_manager.DatabaseContextManager() as db:
                 # Создаем таблицу если её нет
                 db.cursor.execute('''
                     CREATE TABLE IF NOT EXISTS fn_sale_task (
-                        serialNumber TEXT PRIMARY KEY,
-                        fn_serial TEXT
+                        "serialNumber" TEXT PRIMARY KEY,
+                        "fn_serial" TEXT
                     )
                 ''')
 
                 if checked:
                     db.cursor.execute(
-                        'INSERT OR IGNORE INTO fn_sale_task (serialNumber, fn_serial) VALUES (?, ?)',
+                        '''INSERT INTO fn_sale_task ("serialNumber", "fn_serial") 
+                           VALUES (%s, %s)
+                           ON CONFLICT ("serialNumber") DO NOTHING''',
                         (serial_number, fn_serial)
                     )
+                    core.logger.db_service.debug(f"Запись '{serial_number}' успешно добавлена в базу")
                 else:
                     db.cursor.execute(
-                        'DELETE FROM fn_sale_task WHERE serialNumber = ?',
+                        '''DELETE FROM fn_sale_task 
+                           WHERE "serialNumber" = %s''',
                         (serial_number,)
                     )
+                    core.logger.db_service.debug(f"Запись '{serial_number}' успешно удалена из базы")
 
                 return {'status': 'success'}
 
         except Exception as e:
-            core.logger.db_service.error(
-                "Ошибка при обновлении таблицы fn_sale_task", exc_info=True
-            )
+            core.logger.db_service.error("Ошибка при обновлении таблицы fn_sale_task", exc_info=True)
             return {'status': 'error', 'message': str(e)}
-
 
     def update_client_name(self, url_rms, server_name):
         try:
-            with DatabaseContextManager() as db:
+            with core.sys_manager.DatabaseContextManager() as db:
                 # Создаем таблицу clients если её нет
                 db.cursor.execute('''
                     CREATE TABLE IF NOT EXISTS clients (
-                        id TEXT PRIMARY KEY,
-                        url_rms TEXT,
-                        INN TEXT,
-                        organizationName TEXT,
-                        serverName TEXT,
-                        version TEXT,
-                        manual_edit INTEGER DEFAULT 0,
-                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        "id" TEXT PRIMARY KEY,
+                        "url_rms" TEXT,
+                        "INN" TEXT,
+                        "organizationName" TEXT,
+                        "serverName" TEXT,
+                        "version" TEXT,
+                        "manual_edit" INTEGER DEFAULT 0,
+                        "last_updated" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
 
                 # Проверяем, существует ли запись
                 db.cursor.execute(
-                    'SELECT id FROM clients WHERE url_rms = ?',
+                    'SELECT "id" FROM clients WHERE "url_rms" = %s',
                     (url_rms,)
                 )
                 record = db.cursor.fetchone()
@@ -528,8 +598,8 @@ class DbQueries(DatabaseContextManager):
                     # Обновляем существующую запись
                     db.cursor.execute('''
                         UPDATE clients 
-                        SET serverName = ?, manual_edit = 1, last_updated = CURRENT_TIMESTAMP
-                        WHERE url_rms = ?
+                        SET "serverName" = %s, "manual_edit" = 1, "last_updated" = CURRENT_TIMESTAMP
+                        WHERE "url_rms" = %s
                     ''', (server_name, url_rms))
                 else:
                     # Создаем новую запись
@@ -537,8 +607,8 @@ class DbQueries(DatabaseContextManager):
                     unique_id = str(uuid.uuid4())
                     db.cursor.execute('''
                         INSERT INTO clients 
-                        (id, url_rms, serverName, manual_edit) 
-                        VALUES (?, ?, ?, 1)
+                        ("id", "url_rms", "serverName", "manual_edit") 
+                        VALUES (%s, %s, %s, 1)
                     ''', (unique_id, url_rms, server_name))
 
                 return {'success': True}
