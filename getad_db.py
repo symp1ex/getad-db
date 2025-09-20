@@ -3,16 +3,13 @@ import core.configs
 import about
 import os, json
 import time
-from datetime import datetime, timedelta, date
-from pfb import ftp_connect
+import core.dbmanagment
 from flask import Flask, render_template, request, jsonify
-import sqlite3
 import multiprocessing
 import eventlet
 from eventlet import wsgi
 from functools import wraps
-from delete_fr import delete_fr
-import calendar
+from core.delete_fr import delete_fr
 from flask import send_from_directory
 from flask import make_response
 import configparser
@@ -22,8 +19,10 @@ config = core.configs.read_config_ini(about.config_path)
 try: port = int(config.getint("webserver", "port", fallback=None))
 except Exception: port = 30005
 
+db_queries = core.dbmanagment.DbQueries()
 
-app = Flask(__name__)
+
+app = Flask(__name__, static_folder='static')
 
 server_process = None
 
@@ -86,225 +85,6 @@ def requires_auth_admin(f):
     return decorated
 
 
-# Функция для получения данных из базы SQLite
-def get_data_pas_fiscals():
-    try:
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
-        dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
-
-        connection = sqlite3.connect(format_db_path)
-        cursor = connection.cursor()
-        cursor.execute("SELECT * FROM pos_fiscals")
-        data = cursor.fetchall()
-        cursor.execute("PRAGMA table_info(pos_fiscals)")
-        columns = [column[1] for column in cursor.fetchall()]
-
-        # Создаем новый список для данных с дополнительной информацией об устаревании
-        modified_data = []
-        for row in data:
-            modified_row = list(row)
-            licenses_data_index = columns.index('licenses')
-            current_time_index = columns.index('current_time')
-            v_time_index = columns.index('v_time')
-
-            # Обработка licenses
-            licenses_data = row[licenses_data_index]
-            if licenses_data:
-                modified_row[licenses_data_index] = licenses_data
-
-            # Проверка устаревания записи
-            time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[current_time_index]
-            is_expired = not if_show_fn_to_date(time_to_check, dont_valid_fn) if time_to_check else False
-
-            # Добавляем признак устаревания в строку
-            modified_row.append(is_expired)
-
-            modified_data.append(modified_row)
-
-        connection.close()
-        return modified_data, columns
-    except Exception:
-        core.logger.web_server.error("При чтении таблицы 'pos_fiscals' произошло исключение", exc_info=True)
-
-
-def only_pos():
-    try:
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
-
-        connection = sqlite3.connect(format_db_path)
-        cursor = connection.cursor()
-        cursor.execute("SELECT * FROM pos_not_fiscals")
-        data = cursor.fetchall()
-        cursor.execute("PRAGMA table_info(pos_not_fiscals)")
-        columns = [column[1] for column in cursor.fetchall()]  # Получаем названия столбцов
-        connection.close()
-        return data, columns
-    except Exception:
-        core.logger.web_server.error("При чтении таблицы 'pos_not_fiscals' произошло исключение", exc_info=True)
-
-def search_dont_update(field):
-    try:
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
-
-        if request.method == 'POST':
-            search_query = request.form['search_query']
-            days = int(search_query)
-            dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
-
-            connection = sqlite3.connect(format_db_path)
-            cursor = connection.cursor()
-            # Преобразуем текущую дату в формат, который хранится в базе данных
-            today_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # Вычисляем дату, которая на days дней меньше текущей даты
-            past_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-
-            cursor.execute("PRAGMA table_info(pos_fiscals)")  # Получаем названия столбцов из базы данных
-            columns = [column[1] for column in cursor.fetchall()]
-
-            # Создаем запрос SQL для выборки строк, удовлетворяющих условиям
-            query = f"SELECT * FROM pos_fiscals WHERE strftime('%s', [{field}]) < strftime('%s', '{past_date}')"
-            cursor.execute(query)
-            search_results = cursor.fetchall()
-            # Создаем новый список для данных с замененными значениями в столбце licenses
-            modified_data = []
-            for row in search_results:
-                modified_row = list(row)  # Преобразуем кортеж в список
-                licenses_data_index = columns.index('licenses')
-                current_time_index = columns.index('current_time')
-                v_time_index = columns.index('v_time')
-
-                licenses_data = row[licenses_data_index]
-                if licenses_data:  # Если есть данные в столбце licenses
-                    # Замена данных в столбце licenses на ссылку
-                    modified_row[licenses_data_index] = licenses_data
-
-                time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[current_time_index]
-                is_expired = not if_show_fn_to_date(time_to_check, dont_valid_fn) if time_to_check else False
-
-                modified_data.append(modified_row)
-
-                modified_row.append(is_expired)
-            connection.close()
-            return search_query, modified_data, columns
-    except Exception:
-        core.logger.web_server.error("Не удалось сделать посиковый запрос", exc_info=True)
-
-def get_default_dates():
-    try:
-        today = date.today()
-        next_month = today.replace(day=1)
-        if today.month == 12:
-            next_month = next_month.replace(year=today.year + 1, month=1)
-        else:
-            next_month = next_month.replace(month=today.month + 1)
-        last_day = next_month.replace(day=calendar.monthrange(next_month.year, next_month.month)[1])
-        return today.strftime('%Y-%m-%d'), last_day.strftime('%Y-%m-%d')
-    except Exception:
-        core.logger.web_server.error("Error: не установить дефолтный диапозон дат", exc_info=True)
-
-def if_show_fn_to_date(date_string, dont_valid_fn):
-    try:
-        # Преобразуем строку в объект datetime
-        input_date = datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
-
-        # Добавляем 5 дней
-        input_date_plus = input_date + timedelta(days=dont_valid_fn)
-
-        # Получаем текущую дату
-        current_date = datetime.now()
-
-        # Сравниваем и выводим результат
-        result = input_date_plus >= current_date
-        return result
-    except Exception:
-        core.logger.web_server.error(f"Не удалось вычислить разницу между текущей датой и {date_string}", exc_info=True)
-
-def get_expire_fn():
-    try:
-        dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
-
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
-        conn = sqlite3.connect(format_db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS fn_sale_task (
-                serialNumber TEXT PRIMARY KEY,
-                fn_serial TEXT
-            )
-        ''')
-        conn.commit()
-        conn.close()
-
-        if request.method == 'POST':
-            start_date = request.form.get('start_date')
-            end_date = request.form.get('end_date')
-        else:
-            start_date = request.args.get('start_date')
-            end_date = request.args.get('end_date')
-            if not start_date or not end_date:
-                start_date, end_date = get_default_dates()
-
-        show_marked_only = request.args.get('show_marked_only', 'true') == 'true'
-
-        conn = sqlite3.connect(format_db_path)
-        cursor = conn.cursor()
-
-        cursor.execute('SELECT serialNumber FROM fn_sale_task')
-        marked_records = {row[0] for row in cursor.fetchall()}
-
-        base_query = """
-            SELECT pos_fiscals.serialNumber, 
-                   clients.serverName as client,
-                   pos_fiscals.RNM, 
-                   pos_fiscals.fn_serial, 
-                   pos_fiscals.organizationName, 
-                   pos_fiscals.INN, 
-                   date(pos_fiscals.dateTime_end) as dateTime_end,
-                   pos_fiscals.current_time, 
-                   pos_fiscals.v_time,
-                   pos_fiscals.url_rms
-            FROM pos_fiscals 
-            LEFT JOIN clients ON pos_fiscals.url_rms = clients.url_rms
-            WHERE date(dateTime_end) >= date(?) AND date(dateTime_end) <= date(?)
-        """
-
-        if not show_marked_only:
-            base_query += " AND serialNumber NOT IN (SELECT serialNumber FROM fn_sale_task)"
-
-        base_query += " ORDER BY dateTime_end ASC"
-
-        cursor.execute(base_query, (start_date, end_date))
-        rows = cursor.fetchall()
-
-        records = []
-        for row in rows:
-            record = dict(
-                zip(['serialNumber', 'client', 'RNM', 'fn_serial', 'organizationName', 'INN',
-                     'dateTime_end', 'current_time', 'v_time', 'url_rms'], row))
-
-            # Определяем, какое время использовать
-            time_to_check = record['v_time'] if record['v_time'] not in (None, '', 'None') else record['current_time']
-
-            # Проверяем условие через функцию if_show_fn_to_date
-            if if_show_fn_to_date(time_to_check, dont_valid_fn):
-                # Удаляем временные поля из словаря
-                del record['current_time']
-                del record['v_time']
-                # Добавляем информацию о том, отмечена ли запись
-                record['is_marked'] = record['serialNumber'] in marked_records
-                records.append(record)
-
-        conn.close()
-
-        return records, start_date, end_date, show_marked_only
-    except Exception:
-        core.logger.web_server.error("Неожиданное исключение при запросе к заканчивающимся ФН", exc_info=True)
-
-
 @app.route('/')
 @requires_auth
 def index():
@@ -314,7 +94,7 @@ def index():
 @app.route('/fiscals')
 @requires_auth
 def fiscals():
-    data, columns = get_data_pas_fiscals()
+    data, columns = db_queries.get_data_pos_fiscals()
     # Определяем столбцы, которые должны быть видимы по умолчанию
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial', 'dateTime_end',
                                'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
@@ -341,7 +121,7 @@ def download_license(index):
 @app.route('/onlypos')
 @requires_auth
 def pos():
-    data, columns = only_pos()
+    data, columns = db_queries.only_pos()
     return render_template('pos.html', data=data, columns=columns)
 
 
@@ -349,56 +129,11 @@ def pos():
 @requires_auth
 def search():
     try:
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
+        search_query, modified_data, columns, default_visible_columns = db_queries.search_querie()
 
-        if request.method == 'POST':
-            search_query = request.form['search_query']
-            dont_valid_fn = int(config.get("db-update", "day_filter_expire", fallback=5))
-
-            connection = sqlite3.connect(format_db_path)
-            cursor = connection.cursor()
-            cursor.execute("PRAGMA table_info(pos_fiscals)")
-            columns = [column[1] for column in cursor.fetchall()]
-
-            query = "SELECT * FROM pos_fiscals WHERE "
-            for column in columns:
-                query += f"{column} LIKE '%{search_query}%' OR "
-            query = query[:-4]
-
-            cursor.execute(query)
-            search_results = cursor.fetchall()
-
-            # Создаем новый список для данных с проверкой на устаревание
-            modified_data = []
-            for row in search_results:
-                modified_row = list(row)
-                licenses_data_index = columns.index('licenses')
-                current_time_index = columns.index('current_time')
-                v_time_index = columns.index('v_time')
-
-                # Обработка licenses
-                licenses_data = row[licenses_data_index]
-                if licenses_data:
-                    modified_row[licenses_data_index] = licenses_data
-
-                # Проверка устаревания записи
-                time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[current_time_index]
-                is_expired = not if_show_fn_to_date(time_to_check, dont_valid_fn) if time_to_check else False
-
-                # Добавляем признак устаревания в строку
-                modified_row.append(is_expired)
-
-                modified_data.append(modified_row)
-
-            connection.close()
-            default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
-                                       'dateTime_end',
-                                       'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
-                                       'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
-            return render_template('search.html', search_query=search_query,
-                                   search_results=modified_data, columns=columns,
-                                   default_visible_columns=default_visible_columns, enumerate=enumerate)
+        return render_template('search.html', search_query=search_query,
+                               search_results=modified_data, columns=columns,
+                               default_visible_columns=default_visible_columns, enumerate=enumerate)
     except Exception:
         core.logger.web_server.error("Не удалось сделать поисковый запрос", exc_info=True)
 
@@ -407,7 +142,7 @@ def search():
 @requires_auth
 def dont_update():
     field = "current_time"
-    search_query, modified_data, columns = search_dont_update(field)
+    search_query, modified_data, columns = db_queries.search_dont_update(field)
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
                                'dateTime_end',
                                'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
@@ -420,7 +155,7 @@ def dont_update():
 @requires_auth
 def dont_validation():
     field = "v_time"
-    search_query, modified_data, columns = search_dont_update(field)
+    search_query, modified_data, columns = db_queries.search_dont_update(field)
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
                                'dateTime_end',
                                'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
@@ -446,7 +181,7 @@ def del_fr():
 @app.route('/expire_fn', methods=['GET', 'POST'])
 @requires_auth
 def expire_fn():
-    records, start_date, end_date, show_marked_only = get_expire_fn()
+    records, start_date, end_date, show_marked_only = db_queries.get_expire_fn()
 
     return render_template('expirefn.html',
                          records=records,
@@ -463,26 +198,12 @@ def toggle_task():
         fn_serial = request.form.get('fnSerial')
         checked = request.form.get('checked') == 'true'
 
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
-        conn = sqlite3.connect(format_db_path)
-        cursor = conn.cursor()
-
-        try:
-            if checked:
-                cursor.execute('INSERT OR IGNORE INTO fn_sale_task (serialNumber, fn_serial) VALUES (?, ?)',
-                               (serial_number, fn_serial))
-            else:
-                cursor.execute('DELETE FROM fn_sale_task WHERE serialNumber = ?', (serial_number,))
-            conn.commit()
-            return jsonify({'status': 'success'})
-        except Exception as e:
-            return jsonify({'status': 'error', 'message': str(e)})
-        finally:
-            conn.close()
+        result = db_queries.toggle_task(serial_number, fn_serial, checked)
+        return jsonify(result)
     except Exception:
         core.logger.web_server.error(
             "Неожиданное исключение при проверке ФР, на которые заведены задачи", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Внутренняя ошибка сервера'})
 
 @app.route('/settings')
 @requires_auth_admin
@@ -575,25 +296,12 @@ def update_client_name():
         url_rms = data['url_rms']
         server_name = data['server_name']
 
-        dbname = config.get("db-update", "db-name", fallback=None)
-        format_db_path = about.db_path.format(dbname=dbname)
-
-        conn = sqlite3.connect(format_db_path)
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            UPDATE clients 
-            SET serverName = ?, manual_edit = 1 
-            WHERE url_rms = ?
-        ''', (server_name, url_rms))
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({'success': True})
+        result = db_queries.update_client_name(url_rms, server_name)
+        return jsonify(result)
     except Exception as e:
         core.logger.web_server.error("Ошибка при обновлении имени клиента", exc_info=True)
         return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/logout')
 def logout():
@@ -603,10 +311,14 @@ def logout():
 
 
 if __name__ == "__main__":
+    db_update = core.dbmanagment.DbUpdate()
+
+    core.logger.web_server.info(f"Версия: {about.version}")
+
     if not os.path.exists(about.config_path):
         core.configs.create_confgi_ini()
 
-    server_process = multiprocessing.Process(target=ftp_connect)
+    server_process = multiprocessing.Process(target=db_update.pos_tables_update)
     server_process.daemon = True
     server_process.start()
 

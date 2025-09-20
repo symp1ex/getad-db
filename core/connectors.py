@@ -1,14 +1,42 @@
+import core.logger
+import core.sys_manager
+import about
 import sqlite3
 import requests
 import uuid
 import time
-import core.logger
-from core.configs import read_config_ini
-import about
+import ftplib
 
-class IikoRms:
+class FtpContextManager(core.sys_manager.ResourceManagement):
     def __init__(self):
-        self.config = read_config_ini(about.config_path)
+        super().__init__()
+        try:
+            self.server = self.config.get("ftp-connect", "ftpHost", fallback=None)
+            self.username = self.config.get("ftp-connect", "ftpUser", fallback=None)
+            self.password = self.config.get("ftp-connect", "ftpPass", fallback=None)
+        except Exception:
+            core.logger.db_service.error(
+                "Не удалось параметры подключения к FTP-серверу, проверьте настройки", exc_info=True)
+
+        self.ftp = None
+
+    def __enter__(self):
+        try:
+            self.ftp = ftplib.FTP(self.server)
+            self.ftp.login(self.username, self.password)
+            return self.ftp
+        except Exception:
+            core.logger.db_service.error(
+                "Не удалось подключиться к FTP-серверу, проверьте параметры подключения", exc_info=True)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.ftp:
+            try: self.ftp.quit()
+            except: pass
+
+class IikoRms(core.sys_manager.ResourceManagement):
+    def __init__(self):
+        super().__init__()
         self.dbname = self.config.get("db-update", "db-name", fallback=None)
         self.format_db_path = about.db_path.format(dbname=self.dbname)
 
