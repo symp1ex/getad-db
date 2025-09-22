@@ -197,27 +197,36 @@
         }
     </style>
     <script>
+        // Объект для хранения текущего направления сортировки каждого столбца
+        const sortDirections = {};
+
         function sortTable(columnIndex) {
-            var table, rows, switching, i, x, y, shouldSwitch;
-            table = document.getElementById("data-table");
-            switching = true;
-            while (switching) {
-                switching = false;
-                rows = table.rows;
-                for (i = 1; i < (rows.length - 1); i++) {
-                    shouldSwitch = false;
-                    x = rows[i].getElementsByTagName("td")[columnIndex];
-                    y = rows[i + 1].getElementsByTagName("td")[columnIndex];
-                    if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
-                        shouldSwitch = true;
-                        break;
-                    }
+            var table = document.getElementById("data-table");
+            var tbody = table.tBodies[0];
+            var rows = Array.from(tbody.rows);
+            
+            // Получаем или устанавливаем направление сортировки для этого столбца
+            // true = по возрастанию, false = по убыванию
+            sortDirections[columnIndex] = !sortDirections[columnIndex];
+            const isAscending = sortDirections[columnIndex];
+            
+            // Сортировка массива строк
+            rows.sort(function(a, b) {
+                var aValue = a.getElementsByTagName("td")[columnIndex].innerHTML.toLowerCase();
+                var bValue = b.getElementsByTagName("td")[columnIndex].innerHTML.toLowerCase();
+                
+                if (isAscending) {
+                    return aValue > bValue ? 1 : -1;
+                } else {
+                    return aValue < bValue ? 1 : -1;
                 }
-                if (shouldSwitch) {
-                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                    switching = true;
-                }
-            }
+            });
+            
+            // Перемещение строк в таблице в соответствии с отсортированным массивом
+            rows.forEach(function(row) {
+                tbody.appendChild(row);
+            });
+            
             updateRowCounter(); // Обновляем счётчик строк после сортировки
         }
 
@@ -494,6 +503,50 @@
             document.addEventListener('click', function(e) {
                 if (!contextMenu.contains(e.target)) {
                     hideContextMenu();
+                }
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Найти все ячейки с данными о лицензиях
+            const licenseCells = document.querySelectorAll('td a[onclick*="downloadTXT"]');
+            
+            licenseCells.forEach(function(cell) {
+                // Получить данные о лицензиях
+                const onclick = cell.getAttribute('onclick');
+                const licenseData = onclick.split("'")[1]; // Извлекаем JSON-строку из onclick
+                
+                try {
+                    const licenses = JSON.parse(licenseData);
+                    // Проверяем наличие лицензии 17
+                    const hasLicense17 = licenses.hasOwnProperty('17');
+                    
+                    // Проверяем срок действия лицензии 17, если она есть
+                    let licenseValid = false;
+                    if (hasLicense17) {
+                        const dateUntil = new Date(licenses['17'].dateUntil);
+                        const today = new Date();
+                        licenseValid = dateUntil >= today;
+                    }
+                    
+                    // Создаем элемент индикатора
+                    const indicator = document.createElement('span');
+                    indicator.style.marginLeft = '5px';
+                    
+                    if (hasLicense17 && licenseValid) {
+                        // Лицензия 17 существует и не просрочена
+                        indicator.innerHTML = '✔️';
+                        indicator.style.color = 'green';
+                    } else {
+                        // Лицензия 17 отсутствует или просрочена
+                        indicator.innerHTML = '❌';
+                        indicator.style.color = 'red';
+                    }
+                    
+                    // Добавляем индикатор рядом с ссылкой
+                    cell.parentNode.appendChild(indicator);
+                } catch (e) {
+                    console.error('Ошибка при разборе данных о лицензиях:', e);
                 }
             });
         });

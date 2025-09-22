@@ -29,7 +29,6 @@ server_process = None
 def crash_server():
     time.sleep(5)
     global server_process
-    global clients_update_process
 
     if server_process:
         server_process.terminate()
@@ -129,7 +128,15 @@ def pos():
 @requires_auth
 def search():
     try:
-        search_query, modified_data, columns, default_visible_columns = db_queries.search_querie()
+        if request.method == 'POST':
+            search_query = request.form['search_query']
+
+        modified_data, columns = db_queries.search_querie(search_query)
+
+        default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
+                                   'dateTime_end', 'bootVersion', 'ffdVersion', 'INN', 'attribute_excise',
+                                   'attribute_marked', 'installed_driver', 'url_rms', 'teamviewer_id',
+                                   'anydesk_id', 'litemanager_id']
 
         return render_template('search.html', search_query=search_query,
                                search_results=modified_data, columns=columns,
@@ -141,12 +148,18 @@ def search():
 @app.route('/dont-update', methods=['GET', 'POST'])
 @requires_auth
 def dont_update():
+    if request.method == 'POST':
+        search_query = request.form['search_query']
+        days = int(search_query)
+
     field = "current_time"
-    search_query, modified_data, columns = db_queries.search_dont_update(field)
+    modified_data, columns = db_queries.search_dont_update(field, days)
+
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
                                'dateTime_end',
                                'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
                                'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
+
     return render_template('search.html', search_query=search_query,
                            search_results=modified_data, columns=columns,
                            default_visible_columns=default_visible_columns, enumerate=enumerate)
@@ -154,12 +167,18 @@ def dont_update():
 @app.route('/dont-validation', methods=['GET', 'POST'])
 @requires_auth
 def dont_validation():
+    if request.method == 'POST':
+        search_query = request.form['search_query']
+        days = int(search_query)
+
     field = "v_time"
-    search_query, modified_data, columns = db_queries.search_dont_update(field)
+    modified_data, columns = db_queries.search_dont_update(field, days)
+
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
                                'dateTime_end',
                                'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
                                'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
+
     return render_template('search.html', search_query=search_query,
                            search_results=modified_data, columns=columns,
                            default_visible_columns=default_visible_columns, enumerate=enumerate)
@@ -172,7 +191,7 @@ def del_fr():
         if request.method == 'POST':
             json_name = request.form['search_query']
             results.extend(delete_fr(json_name))  # Добавляем результаты в массив
-    except Exception as e:
+    except Exception:
         core.logger.web_server.error("Не удалось удалить запись о ФР из БД", exc_info=True)
         results.append("Ошибка: не удалось удалить запись о ФР из БД")
 
@@ -181,13 +200,26 @@ def del_fr():
 @app.route('/expire_fn', methods=['GET', 'POST'])
 @requires_auth
 def expire_fn():
-    records, start_date, end_date, show_marked_only = db_queries.get_expire_fn()
+    if request.method == 'POST':
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+    else:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        if not start_date or not end_date:
+            start_date, end_date = db_queries.get_default_dates()
+
+    show_marked = request.args.get('show_marked_only', 'true') == 'true'
+
+    records = db_queries.get_expire_fn(start_date, end_date, show_marked)
+    core.logger.web_server.debug(f"Получен список ФН, заканчивающихся от '{start_date}' до '{end_date}':")
+    core.logger.web_server.debug(records)
 
     return render_template('expirefn.html',
                          records=records,
                          start_date=start_date,
                          end_date=end_date,
-                         show_marked_only=show_marked_only)
+                         show_marked_only=show_marked)
 
 
 @app.route('/toggle_task', methods=['POST'])

@@ -2,7 +2,6 @@ import core.sys_manager
 import core.logger
 import core.configs
 import core.connectors
-from flask import request
 import os
 import json
 import time
@@ -320,78 +319,70 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
             core.logger.db_service.error("При чтении таблицы 'pos_not_fiscals' произошло исключение", exc_info=True)
             return [], []
 
-    def search_querie(self):
+    def search_querie(self, search_query):
         try:
-            if request.method == 'POST':
-                search_query = request.form['search_query']
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Получаем названия столбцов из информационной схемы PostgreSQL
+                db.cursor.execute('''
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'pos_fiscals'
+                    ORDER BY ordinal_position
+                ''')
+                columns = [column[0] for column in db.cursor.fetchall()]
 
-                with core.sys_manager.DatabaseContextManager() as db:
-                    # Получаем названия столбцов из информационной схемы PostgreSQL
-                    db.cursor.execute('''
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'pos_fiscals'
-                        ORDER BY ordinal_position
-                    ''')
-                    columns = [column[0] for column in db.cursor.fetchall()]
+                # Создаем запрос SQL для поиска по всем столбцам
+                query = "SELECT * FROM pos_fiscals WHERE "
+                conditions = []
 
-                    # Создаем запрос SQL для поиска по всем столбцам
-                    query = "SELECT * FROM pos_fiscals WHERE "
-                    conditions = []
+                for column in columns:
+                    conditions.append(f'"{column}"::TEXT ILIKE %s')
 
-                    for column in columns:
-                        conditions.append(f'"{column}"::TEXT ILIKE %s')
+                # Соединяем условия поиска оператором OR
+                query += " OR ".join(conditions)
 
-                    # Соединяем условия поиска оператором OR
-                    query += " OR ".join(conditions)
+                # Создаем список параметров для запроса (по одному '%значение%' на каждый столбец)
+                params = [f'%{search_query}%'] * len(columns)
 
-                    # Создаем список параметров для запроса (по одному '%значение%' на каждый столбец)
-                    params = [f'%{search_query}%'] * len(columns)
+                # Выполняем запрос
+                db.cursor.execute(query, params)
+                search_results = db.cursor.fetchall()
 
-                    # Выполняем запрос
-                    db.cursor.execute(query, params)
-                    search_results = db.cursor.fetchall()
+                # Создаем новый список для данных с проверкой на устаревание
+                modified_data = []
+                for row in search_results:
+                    modified_row = list(row)
 
-                    # Создаем новый список для данных с проверкой на устаревание
-                    modified_data = []
-                    for row in search_results:
-                        modified_row = list(row)
+                    # Определяем индексы важных столбцов
+                    licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
+                    current_time_index = columns.index('current_time') if 'current_time' in columns else -1
+                    v_time_index = columns.index('v_time') if 'v_time' in columns else -1
 
-                        # Определяем индексы важных столбцов
-                        licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
-                        current_time_index = columns.index('current_time') if 'current_time' in columns else -1
-                        v_time_index = columns.index('v_time') if 'v_time' in columns else -1
+                    # Обработка licenses
+                    if licenses_data_index >= 0 and row[licenses_data_index]:
+                        modified_row[licenses_data_index] = row[licenses_data_index]
 
-                        # Обработка licenses
-                        if licenses_data_index >= 0 and row[licenses_data_index]:
-                            modified_row[licenses_data_index] = row[licenses_data_index]
+                    # Проверка устаревания записи
+                    time_to_check = None
+                    if v_time_index >= 0 and current_time_index >= 0:
+                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
+                            current_time_index]
 
-                        # Проверка устаревания записи
-                        time_to_check = None
-                        if v_time_index >= 0 and current_time_index >= 0:
-                            time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                                current_time_index]
+                    is_expired = False
+                    if time_to_check:
+                        is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
 
-                        is_expired = False
-                        if time_to_check:
-                            is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
+                    # Добавляем признак устаревания в строку
+                    modified_row.append(is_expired)
 
-                        # Добавляем признак устаревания в строку
-                        modified_row.append(is_expired)
+                    modified_data.append(modified_row)
 
-                        modified_data.append(modified_row)
-
-                    default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial',
-                                               'dateTime_end', 'bootVersion', 'ffdVersion', 'INN', 'attribute_excise',
-                                               'attribute_marked', 'installed_driver', 'url_rms', 'teamviewer_id',
-                                               'anydesk_id', 'litemanager_id']
-
-                    return search_query, modified_data, columns, default_visible_columns
+                return modified_data, columns
 
         except Exception:
             core.logger.db_service.error("Не удалось сделать поисковый запрос", exc_info=True)
 
-    def get_expire_fn(self):
+    def get_expire_fn(self, start_date, end_date, show_marked):
         try:
             with core.sys_manager.DatabaseContextManager() as db:
                 db.cursor.execute('''
@@ -415,17 +406,6 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                     )
                 ''')
 
-            if request.method == 'POST':
-                start_date = request.form.get('start_date')
-                end_date = request.form.get('end_date')
-            else:
-                start_date = request.args.get('start_date')
-                end_date = request.args.get('end_date')
-                if not start_date or not end_date:
-                    start_date, end_date = self.get_default_dates()
-
-            show_marked_only = request.args.get('show_marked_only', 'true') == 'true'
-
             with core.sys_manager.DatabaseContextManager() as db:
                 db.cursor.execute('SELECT "serialNumber" FROM fn_sale_task')
                 marked_records = {row[0] for row in db.cursor.fetchall()}
@@ -446,7 +426,7 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                     WHERE date(pos_fiscals."dateTime_end") >= date(%s) AND date(pos_fiscals."dateTime_end") <= date(%s)
                 """
 
-                if not show_marked_only:
+                if not show_marked:
                     base_query += ' AND pos_fiscals."serialNumber" NOT IN (SELECT "serialNumber" FROM fn_sale_task)'
 
                 base_query += ' ORDER BY pos_fiscals."dateTime_end" ASC'
@@ -473,67 +453,63 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                         record['is_marked'] = record['serialNumber'] in marked_records
                         records.append(record)
 
-            return records, start_date, end_date, show_marked_only
+            return records
         except Exception:
             core.logger.db_service.error("Неожиданное исключение при запросе к заканчивающимся ФН", exc_info=True)
 
-    def search_dont_update(self, field):
+    def search_dont_update(self, field, days):
         try:
-            if request.method == 'POST':
-                search_query = request.form['search_query']
-                days = int(search_query)
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Получаем названия столбцов из информационной схемы PostgreSQL
+                db.cursor.execute('''
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'pos_fiscals'
+                    ORDER BY ordinal_position
+                ''')
+                columns = [column[0] for column in db.cursor.fetchall()]
 
-                with core.sys_manager.DatabaseContextManager() as db:
-                    # Получаем названия столбцов из информационной схемы PostgreSQL
-                    db.cursor.execute('''
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'pos_fiscals'
-                        ORDER BY ordinal_position
-                    ''')
-                    columns = [column[0] for column in db.cursor.fetchall()]
+                # Строим запрос для поиска устаревших записей
+                # Используем синтаксис PostgreSQL для работы с датами
+                query = f'''
+                    SELECT * FROM pos_fiscals 
+                    WHERE "{field}"::timestamp < (CURRENT_TIMESTAMP - INTERVAL '{days} days')
+                '''
 
-                    # Строим запрос для поиска устаревших записей
-                    # Используем синтаксис PostgreSQL для работы с датами
-                    query = f'''
-                        SELECT * FROM pos_fiscals 
-                        WHERE "{field}"::timestamp < (CURRENT_TIMESTAMP - INTERVAL '{days} days')
-                    '''
+                # Выполняем запрос
+                db.cursor.execute(query)
+                search_results = db.cursor.fetchall()
 
-                    # Выполняем запрос
-                    db.cursor.execute(query)
-                    search_results = db.cursor.fetchall()
+                # Создаем новый список для данных с проверкой на устаревание
+                modified_data = []
+                for row in search_results:
+                    modified_row = list(row)
 
-                    # Создаем новый список для данных с проверкой на устаревание
-                    modified_data = []
-                    for row in search_results:
-                        modified_row = list(row)
+                    # Определяем индексы важных столбцов
+                    licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
+                    current_time_index = columns.index("current_time") if "current_time" in columns else -1
+                    v_time_index = columns.index('v_time') if 'v_time' in columns else -1
 
-                        # Определяем индексы важных столбцов
-                        licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
-                        current_time_index = columns.index("current_time") if "current_time" in columns else -1
-                        v_time_index = columns.index('v_time') if 'v_time' in columns else -1
+                    # Обработка licenses
+                    if licenses_data_index >= 0 and row[licenses_data_index]:
+                        modified_row[licenses_data_index] = row[licenses_data_index]
 
-                        # Обработка licenses
-                        if licenses_data_index >= 0 and row[licenses_data_index]:
-                            modified_row[licenses_data_index] = row[licenses_data_index]
+                    # Проверка устаревания записи
+                    time_to_check = None
+                    if v_time_index >= 0 and current_time_index >= 0:
+                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
+                            current_time_index]
 
-                        # Проверка устаревания записи
-                        time_to_check = None
-                        if v_time_index >= 0 and current_time_index >= 0:
-                            time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                                current_time_index]
+                    is_expired = False
+                    if time_to_check:
+                        is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
 
-                        is_expired = False
-                        if time_to_check:
-                            is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
+                    # Добавляем признак устаревания в строку
+                    modified_row.append(is_expired)
 
-                        # Добавляем признак устаревания в строку
-                        modified_row.append(is_expired)
+                    modified_data.append(modified_row)
 
-                        modified_data.append(modified_row)
-
-                    return search_query, modified_data, columns
+                return modified_data, columns
         except Exception:
             core.logger.db_service.error("Не удалось сделать поисковый запрос устаревших записей", exc_info=True)
 

@@ -38,6 +38,7 @@ class IikoRms(core.sys_manager.DatabaseContextManager):
 
     def update_clients_info(self):
         while True:
+            core.logger.clients_update.info(f"Начато обновление базы клиентов")
             try:
                 with core.sys_manager.DatabaseContextManager() as db:
                     # Создаем таблицу clients, если она не существует
