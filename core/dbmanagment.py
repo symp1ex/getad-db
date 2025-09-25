@@ -759,7 +759,42 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                         f"Не найдено активных записей в таблице '{table_name}'")
 
                 return id_list
-
         except Exception:
             core.logger.db_service.error(f"Ошибка при поиске записей в таблице '{table_name}'", exc_info=True)
             return []
+
+    def select_bitrix_contractors(self, responsible_id, observers_id):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Сбрасываем все значения responsible
+                db.cursor.execute('UPDATE bitrix_employees SET responsible = 0')
+                # Сбрасываем все значения observers
+                db.cursor.execute('UPDATE bitrix_projects SET observers = 0')
+
+                if not responsible_id == None:
+                    # Устанавливаем значение responsible для выбранного сотрудника
+                    db.cursor.execute('UPDATE bitrix_employees SET responsible = 1 WHERE id = %s', (responsible_id,))
+
+                if not observers_id == None:
+                    # Устанавливаем значение observers для выбранной группы
+                    db.cursor.execute('UPDATE bitrix_projects SET observers = 1 WHERE id = %s', (observers_id,))
+        except Exception:
+            core.logger.db_service.error(
+                "Ошибка при обновлении записей в таблицах 'bitrix_employees' и 'bitrix_projects'", exc_info=True)
+
+    def get_list_bitrix_contractors(self):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                db.cursor.execute(
+                    'SELECT id, "NAME", "LAST_NAME", responsible FROM bitrix_employees ORDER BY  CAST(id AS INTEGER)')
+                bitrix_employees = [dict(zip(['id', 'NAME', 'LAST_NAME', 'responsible'], row)) for row in
+                                    db.cursor.fetchall()]
+
+                db.cursor.execute('SELECT id, "NAME", observers FROM bitrix_projects ORDER BY  CAST(id AS INTEGER)')
+                bitrix_projects = [dict(zip(['id', 'NAME', 'observers'], row)) for row in db.cursor.fetchall()]
+
+                return bitrix_employees, bitrix_projects
+
+        except Exception:
+            core.logger.db_service.error(
+                "Ошибка при получении списка сотрудников и проектов из базы данных", exc_info=True)

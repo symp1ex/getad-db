@@ -454,7 +454,7 @@
         function saveClientName() {
             const newServerName = document.getElementById('serverName').value;
             
-            fetch('/update_client_name', {
+            fetch('/edit_client_name', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

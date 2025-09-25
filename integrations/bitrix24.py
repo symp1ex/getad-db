@@ -11,7 +11,7 @@ db_queries = core.dbmanagment.DbQueries()
 
 class Bitrix24Task(core.sys_manager.ResourceManagement):
     bitrix_json_name = "bitrix24.json"
-    bitrix_json_data = {"enabled": False, "webhook_url": "", "count_attempts": 5, "timeout": 15}
+    bitrix_json_data = {"enabled": 0, "webhook_url": "", "count_attempts": 5, "timeout": 15}
 
     def __init__(self):
         super().__init__()
@@ -216,7 +216,7 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
                 "bitrix_projects", "observers", "SUBJECT_NAME")[0])
         except:
             core.logger.bitrix24.error(
-                f"Не удалось получить ID для автора задач или группы наблюдателей, процесс будет прерван", exc_info=True)
+                f"Не удалось получить ID ответственного или группы наблюдателей, процесс будет прерван", exc_info=True)
             return
 
         try:

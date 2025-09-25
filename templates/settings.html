@@ -100,30 +100,35 @@
             background: white;
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 0.94em;
         }
 
         .settings-group h3 {
             margin-top: 0;
+            font-size: 1.1em;
             color: var(--primary-color);
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
         }
 
         .setting-item {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .setting-item label {
             display: block;
             margin-bottom: 5px;
+            font-size: 0.94em;
             color: var(--primary-color);
         }
 
         .setting-item input {
             width: 100%;
-            padding: 8px;
+            padding: 6px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
+            font-size: 0.94em;
         }
 
         .button-container {
@@ -281,10 +286,11 @@
 
         .setting-item input {
             width: 50%; /* Фиксированная ширина для всех input полей */
-            padding: 8px;
+            padding: 4px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
             margin-left: 10px; /* Отступ от label */
+            font-size: 0.87em;
         }
 
         .setting-item-checkbox {
@@ -294,7 +300,7 @@
 
         .setting-item-checkbox label {
             flex: 1;
-            margin-right: 0;
+            margin-right: 0;            
         }
 
         .setting-item-checkbox input[type="checkbox"] {
@@ -302,24 +308,26 @@
             margin-left: 0;
             margin-right: auto;
             /* Это создаст одинаковое выравнивание с полями ввода ниже */
-            margin-right: calc(51.35% - 13px); /* 13px - примерная ширина чекбокса */
+            margin-right: calc(50.85% - 13px); /* 13px - примерная ширина чекбокса */
+            transform: scale(0.9);
         }
 
         .settings-group {
             background-color: white;
-            padding: 20px;
+            padding: 20px 20px 13px 20px; /* верх право низ лево */
             border-radius: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 17px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .form-control {
-            padding: 8px;
+            padding: 4px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            width: 51.6%;
+            width: 50.9%;
             background-color: white;
             color: black;
+            font-size: 0.87em;
             transition: border-color 0.3s ease;
         }
 
@@ -366,8 +374,8 @@
         }
 
         .folder-icon, .file-icon {
-            margin-right: 10px;
-            font-size: 1.2em;
+            margin-right: 8px;
+            font-size: 1em;
         }
 
         .folder-name, .file-name {
@@ -394,8 +402,9 @@
             background-color: #4CAF50;
             color: white !important;
             border-radius: 4px;
+            padding: 4px 8px;
             text-decoration: none;
-            font-size: 0.92em;
+            font-size: 0.89em;
             transition: background-color 0.2s;
         }
 
@@ -428,6 +437,7 @@
     <div class="container">
         <div class="tabs">
             <button class="tab active" onclick="switchTab('settings')">Настройки</button>
+            <button class="tab" onclick="switchTab('integrations')">Интеграции</button>
             <button class="tab" onclick="switchTab('files')">Файлы</button>
         </div>
 
@@ -467,7 +477,7 @@
                     <div class="setting-item">
                         <label for="pass">Пароль</label>
                         <input type="password" id="pass" name="webserver.pass"
-                               value="{{ config['webserver']['pass'] }}">
+                               placeholder="••••••••••••••••">
                     </div>
                     <div class="setting-item">
                         <label for="admin">Администратор</label>
@@ -477,7 +487,7 @@
                     <div class="setting-item">
                         <label for="admin_pass">Пароль администратора</label>
                         <input type="password" id="admin_pass" name="webserver.admin_pass"
-                               value="{{ config['webserver']['admin_pass'] }}">
+                               placeholder="••••••••••••••••">
                     </div>
                 </div>
 
@@ -512,7 +522,7 @@
                     <div class="setting-item">
                         <label for="password">Пароль</label>
                         <input type="password" id="password" name="db-update.password"
-                               value="{{ config['db-update']['password'] }}">
+                               placeholder="••••••••••••••••">
                     </div>                                                                        
                     <div class="setting-item">
                         <label for="dbupdate-period-sec">Период обновления (сек)</label>
@@ -541,7 +551,7 @@
                     <div class="setting-item">
                         <label for="ftpPass">FTP пароль</label>
                         <input type="password" id="ftpPass" name="ftp-connect.ftpPass"
-                               value="{{ config['ftp-connect']['ftpPass'] }}">
+                               placeholder="••••••••••••••••">
                     </div>
                 </div>
 
@@ -582,7 +592,62 @@
                 {% endfor %}
             </ul>
         </div>
-    </div>
+
+        <div id="integrations" class="tab-content">
+            <form id="integrationsForm">
+                <div class="settings-group">
+                    <h3>Настройки Битрикс 24</h3>
+                    <div class="setting-item setting-item-checkbox">
+                        <label for="bitrix24-enabled">Включить интеграцию</label>
+                        <input type="checkbox" id="bitrix24-enabled" name="bitrix24.enabled" 
+                            {% if bitrix_json['enabled'] == 1 %}checked{% endif %}
+                            value="1">
+                    </div>
+                    <div class="setting-item">
+                        <label for="webhook-url">Webhook URL</label>
+                        <input type="password" id="webhook-url" name="bitrix24.webhook_url"
+                            placeholder="••••••••••••••••">
+                    </div>
+                    <div class="setting-item">
+                        <label for="count-attempts">Количество попыток сделать запрос</label>
+                        <input type="number" id="count-attempts" name="bitrix24.count_attempts"
+                            value="{{ bitrix_json['count_attempts'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="timeout">Тайм-аут между попытками (сек)</label>
+                        <input type="number" id="timeout" name="bitrix24.timeout"
+                            value="{{ bitrix_json['timeout'] }}">
+                    </div>
+                    <div class="setting-item">
+                        <label for="responsible-employee">Ответственный сотрудник</label>
+                        <select class="form-control" name="bitrix24.responsible" id="responsible-employee">
+                            <option value="">None</option>
+                            {% for emp in bitrix_employees %}
+                                <option value="{{ emp.id }}" {% if emp.responsible == 1 %}selected{% endif %}>
+                                    {{ emp.id }} - {{ emp.NAME }} {{ emp.LAST_NAME }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label for="observers-group">Группа наблюдателей</label>
+                        <select class="form-control" name="bitrix24.observers" id="observers-group">
+                            <option value="">None</option>
+                            {% for group in bitrix_projects %}
+                                <option value="{{ group.id }}" {% if group.observers == 1 %}selected{% endif %}>
+                                    {{ group.id }} - {{ group.NAME }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+            <div class="button-container">
+                <button type="button" class="button button-secondary" onclick="window.location.href='{{ url_for('settings') }}'">Отмена</button>
+                <button type="submit" class="button button-primary">Сохранить</button>
+            </div>
+            </form>
+    </div>    
 
     <div id="notification" class="notification"></div>
 
@@ -660,6 +725,51 @@
                     setTimeout(() => location.reload(), 3000);
                 } else {
                     showNotification('Ошибка при сохранении настроек', 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Ошибка при сохранении настроек', 'error');
+                console.error('Error:', error);
+            });
+        });
+
+        document.getElementById('integrationsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const settings = {};
+            const responsibleId = document.getElementById('responsible-employee').value;
+            const observersId = document.getElementById('observers-group').value;
+
+            // Добавляем проверку для чек-бокса enabled
+            if (!formData.has('bitrix24.enabled')) {
+                formData.append('bitrix24.enabled', '0');
+            }
+
+            formData.forEach((value, key) => {
+                const [section, option] = key.split('.');
+                if (!settings[section]) settings[section] = {};
+                settings[section][option] = value;
+            });
+
+            fetch('/save_settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    settings: settings,
+                    responsibleId: responsibleId, 
+                    observersId: observersId,
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Настройки интеграции успешно сохранены', 'success');
+                    setTimeout(() => location.reload(), 3000);
+                } else {
+                    showNotification('Ошибка при сохранении настроек интеграции', 'error');
                 }
             })
             .catch(error => {

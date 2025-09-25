@@ -34,6 +34,7 @@ class WebServerSetup(core.sys_manager.ResourceManagement):
             self.port = 30005
 
         self.server_process = None
+        self.bitrix24_thread = None
 
     def webserver(self):
         eventlet.wsgi.server(eventlet.listen(('0.0.0.0', self.port)), self.app, debug=False)
@@ -48,8 +49,8 @@ class WebServerSetup(core.sys_manager.ResourceManagement):
         os._exit(1)
 
     def subprocess_run(self):
-        bitrix24_thread = threading.Thread(target=bitrix24.task_manager, daemon=True)
-        bitrix24_thread.start()
+        self.bitrix24_thread = threading.Thread(target=bitrix24.task_manager, daemon=False)
+        self.bitrix24_thread.start()
 
         db_update.pos_tables_update()
 
@@ -204,7 +205,12 @@ class WebServerRoute(WebServerSetup):
             if not start_date or not end_date:
                 start_date, end_date = db_queries.get_default_dates()
 
-        show_marked = request.args.get('show_marked', 'false') == 'true'
+        # Проверяем куки перед проверкой URL-параметра
+        show_marked = request.cookies.get('show_marked', '') == 'true'
+
+        # URL-параметр имеет приоритет, если он есть
+        if 'show_marked' in request.args:
+            show_marked = request.args.get('show_marked') == 'true'
 
         records = db_queries.get_expire_fn(start_date, end_date, show_marked)
         core.logger.web_server.debug(f"Получен список ФН, заканчивающихся от '{start_date}' до '{end_date}':")
@@ -267,7 +273,19 @@ class WebServerRoute(WebServerSetup):
             # Читаем конфигурацию
             config = core.configs.read_config_ini(self.config_path)
 
-            return render_template('settings.html', config=config, files=files_and_dirs)
+            # Получаем данные из bitrix24.json
+            bitrix_json = bitrix24.bitrix_json
+
+            # Получаем списки сотрудников и проектов
+            try:
+                bitrix_employees, bitrix_projects = db_queries.get_list_bitrix_contractors()
+            except:
+                bitrix_employees = []
+                bitrix_projects = []
+
+            return render_template('settings.html', config=config, files=files_and_dirs,
+                                   bitrix_json=bitrix_json, bitrix_employees=bitrix_employees,
+                                   bitrix_projects=bitrix_projects)
         except Exception:
             core.logger.web_server.error("Не удалось открыть страницу настроек", exc_info=True)
 
@@ -281,22 +299,69 @@ class WebServerRoute(WebServerSetup):
 
     def save_settings(self):
         try:
-            settings = request.get_json()
-            config = configparser.ConfigParser()
+            data = request.get_json()
 
-            # Записываем новые настройки
-            for section, options in settings.items():
-                if not config.has_section(section):
-                    config.add_section(section)
-                for option, value in options.items():
-                    config.set(section, option, str(value))
+            # Проверяем, есть ли в данных поля от формы интеграции
+            if isinstance(data, dict) and 'settings' in data and 'responsibleId' in data and 'observersId' in data:
+                # Обработка данных интеграции
+                settings = data.get('settings')
+                responsible_id = data.get('responsibleId')
+                observers_id = data.get('observersId')
 
-            # Сохраняем в файл
-            with open(self.config_path, 'w') as configfile:
-                config.write(configfile)
+                bitrix_data = bitrix24.read_json_file("source", bitrix24.bitrix_json_name)
 
+                # Обновляем значения из формы
+                if 'bitrix24' in settings:
+                    bitrix_data['enabled'] = int(settings['bitrix24'].get('enabled', 0))
+
+                    # Проверяем webhook_url на пустое значение
+                    webhook_url = settings['bitrix24'].get('webhook_url', '')
+                    if webhook_url and webhook_url.strip():  # Обновляем только если поле не пустое
+                        bitrix_data['webhook_url'] = webhook_url
+
+                    bitrix_data['count_attempts'] = int(settings['bitrix24'].get('count_attempts', 5))
+                    bitrix_data['timeout'] = int(settings['bitrix24'].get('timeout', 15))
+
+                # Сохраняем обновленные настройки Bitrix24
+                bitrix24.write_json_file(bitrix_data, "source", bitrix24.bitrix_json_name)
+
+                # Обновляем таблицы в базе данных
+                db_queries.select_bitrix_contractors(responsible_id, observers_id)
+
+            else:
+                # Обычная логика сохранения настроек
+                settings = data
+                config = configparser.ConfigParser()
+
+                # Если текущий конфиг существует, сначала читаем его
+                if os.path.exists(self.config_path):
+                    config.read(self.config_path)
+
+                # Записываем новые настройки
+                for section, options in settings.items():
+                    if not config.has_section(section):
+                        config.add_section(section)
+
+                    # Проверяем, что options - это словарь
+                    if isinstance(options, dict):
+                        for option, value in options.items():
+                            if option in ['pass', 'admin_pass', 'password', 'ftpPass'] and (
+                                    not value or value.strip() == ''):
+                                continue
+                            config.set(section, option, str(value))
+                    else:
+                        # Если options не словарь, обрабатываем как отдельное значение
+                        core.logger.web_server.warning(
+                            f"Неожиданный тип данных: {section} = {options} (тип: {type(options)})")
+                        config.set(section, 'value', str(options))
+
+                # Сохраняем в файл
+                with open(self.config_path, 'w') as configfile:
+                    config.write(configfile)
+
+            # Перезапускаем сервер в любом случае
             shutdown_thread = threading.Thread(target=self.crash_server)
-            shutdown_thread.daemon = True  # Делаем поток демоном
+            shutdown_thread.daemon = True
             shutdown_thread.start()
             return jsonify({'success': True})
         except Exception as e:
