@@ -1,0 +1,6 @@
+{
+    "enabled": false,
+    "webhook_url": "",
+    "count_attempts": 5,
+    "timeout": 15
+}

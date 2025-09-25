@@ -49,7 +49,7 @@ def logger(file_name, with_console=False):
         try: days = int(config.get("global", "logs-autoclear-days", fallback=None))
         except Exception: days = 7
 
-        log_folder = about.log_folder
+        log_folder = 'source/logs'
 
         if not os.path.exists(log_folder):
             os.makedirs(log_folder)
@@ -109,3 +109,4 @@ def logger(file_name, with_console=False):
 web_server = logger(f"web-server", with_console=True)
 db_service = logger(f"db-service", with_console=True)
 clients_update = logger(f"clients-update", with_console=True)
+bitrix24 = logger(f"bitrix24", with_console=True)

@@ -6,6 +6,7 @@ import os
 import json
 import time
 import threading
+import uuid
 
 iikorms = core.connectors.IikoRms()
 
@@ -14,10 +15,9 @@ class DbUpdate(core.sys_manager.DatabaseContextManager):
         super().__init__()
         self.dbupdate_period = int(self.config.get("db-update", "dbupdate-period-sec", fallback=None))
         self.reference_flaq = int(self.config.get("db-update", "reference", fallback=None))
+        self.clients_update_process = 0
 
     def pos_tables_update(self):
-        clients_update = 0
-
         if self.reference_flaq == True:
             while True:
                 core.logger.db_service.info("Начато обновление базы ККТ")
@@ -54,10 +54,10 @@ class DbUpdate(core.sys_manager.DatabaseContextManager):
 
                     self.clean_fn_sale_task()
 
-                    if clients_update == 0:
+                    if self.clients_update_process == 0:
                         update_clients_info_thread = threading.Thread(target=iikorms.update_clients_info, daemon=True)
                         update_clients_info_thread.start()
-                        clients_update = 1
+                        self.clients_update_process = 1
 
                     core.logger.db_service.info("Обновление базы ФР завершено")
                     core.logger.db_service.info(
@@ -243,6 +243,138 @@ class DbUpdate(core.sys_manager.DatabaseContextManager):
         except Exception:
             core.logger.db_service.error("Не удалось выполнить очистку fn_sale_task", exc_info=True)
 
+    def update_bitrix_employees_table(self, employees):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Создаём таблицу bitrix_employees, если она не существует
+                db.cursor.execute('''CREATE TABLE IF NOT EXISTS bitrix_employees (
+                                    "id" TEXT PRIMARY KEY,
+                                    "NAME" TEXT,
+                                    "LAST_NAME" TEXT,
+                                    "UF_DEPARTMENT" TEXT,
+                                    "responsible" INTEGER DEFAULT 0
+                                )''')
+
+                if employees:
+                    # Получаем все id, которые были до обновления
+                    db.cursor.execute('SELECT "id", "NAME", "LAST_NAME" FROM bitrix_employees')
+                    old_employees = db.cursor.fetchall()
+                    old_ids = set(row[0] for row in old_employees)
+
+                    # Собираем все актуальные ID сотрудников
+                    employee_ids = []
+                    for employee in employees:
+                        employee_id = employee.get('ID')
+                        employee_ids.append(employee_id)
+                        name = employee.get('NAME', '')
+                        last_name = employee.get('LAST_NAME', '')
+
+                        # UF_DEPARTMENT может быть списком, преобразуем его в строку JSON
+                        uf_department = employee.get('UF_DEPARTMENT')
+                        if isinstance(uf_department, list):
+                            uf_department = json.dumps(uf_department, ensure_ascii=False)
+                        else:
+                            uf_department = json.dumps([uf_department] if uf_department else [], ensure_ascii=False)
+
+                        # Вставляем или обновляем запись в таблице
+                        db.cursor.execute('''
+                            INSERT INTO bitrix_employees ("id", "NAME", "LAST_NAME", "UF_DEPARTMENT", "responsible")
+                            VALUES (%s, %s, %s, %s, 0)
+                            ON CONFLICT ("id") 
+                            DO UPDATE SET 
+                                "NAME" = EXCLUDED."NAME", 
+                                "LAST_NAME" = EXCLUDED."LAST_NAME", 
+                                "UF_DEPARTMENT" = EXCLUDED."UF_DEPARTMENT"
+                        ''', (employee_id, name, last_name, uf_department))
+
+                    # Определяем id для удаления
+                    to_delete_ids = old_ids - set(employee_ids)
+                    if to_delete_ids:
+                        deleted_employees = [row for row in old_employees if row[0] in to_delete_ids]
+                        for emp in deleted_employees:
+                            core.logger.bitrix24.debug(
+                                f"Будет удалён сотрудник: id={emp[0]}, NAME={emp[1]}, LAST_NAME={emp[2]}"
+                            )
+
+                        # Удаляем из таблицы
+                        placeholders = ','.join(['%s'] * len(to_delete_ids))
+                        db.cursor.execute(
+                            f'DELETE FROM bitrix_employees WHERE "id" IN ({placeholders})',
+                            tuple(to_delete_ids)
+                        )
+
+                    core.logger.bitrix24.info(
+                        f"Таблица 'bitrix_employees' обновлена, добавлено '{len(employees)}' сотрудников")
+                else:
+                    core.logger.bitrix24.warning("Не удалось получить данные о сотрудниках из Bitrix24")
+                    return False
+
+                return True
+        except Exception:
+            core.logger.bitrix24.error("Не удалось обновить таблицу 'bitrix_employees'", exc_info=True)
+            return False
+
+    def update_bitrix_projects_table(self, projects):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Создаём таблицу bitrix_employees, если она не существует
+                db.cursor.execute('''CREATE TABLE IF NOT EXISTS bitrix_projects (
+                                    "id" TEXT PRIMARY KEY,
+                                    "NAME" TEXT,
+                                    "SUBJECT_NAME" TEXT,
+                                    "observers" INTEGER DEFAULT 0
+                                )''')
+
+                if projects:
+                    # Получаем все id, которые были до обновления
+                    db.cursor.execute('SELECT "id", "NAME", "SUBJECT_NAME" FROM bitrix_projects')
+                    old_projects = db.cursor.fetchall()
+                    old_ids = set(row[0] for row in old_projects)
+
+                    project_ids = []
+                    # Обрабатываем каждого сотрудника
+                    for project in projects:
+                        project_id = project.get('ID')
+                        project_ids.append(project_id)
+                        name = project.get('NAME', '')
+                        subject_name = project.get('SUBJECT_NAME', '')
+
+                        # Вставляем или обновляем запись в таблице
+                        db.cursor.execute('''
+                            INSERT INTO bitrix_projects ("id", "NAME", "SUBJECT_NAME", "observers")
+                            VALUES (%s, %s, %s, 0)
+                            ON CONFLICT ("id") 
+                            DO UPDATE SET 
+                                "NAME" = EXCLUDED."NAME", 
+                                "SUBJECT_NAME" = EXCLUDED."SUBJECT_NAME"
+                        ''', (project_id, name, subject_name))
+
+                    # Определяем id для удаления
+                    to_delete_ids = old_ids - set(project_ids)
+                    if to_delete_ids:
+                        deleted_projects = [row for row in old_projects if row[0] in to_delete_ids]
+                        for emp in deleted_projects:
+                            core.logger.bitrix24.debug(
+                                f"Будет удалёна группа наблюдателей: id={emp[0]}, NAME={emp[1]}, LAST_NAME={emp[2]}"
+                            )
+
+                        # Удаляем из таблицы
+                        placeholders = ','.join(['%s'] * len(to_delete_ids))
+                        db.cursor.execute(
+                            f'DELETE FROM bitrix_projects WHERE "id" IN ({placeholders})',
+                            tuple(to_delete_ids)
+                        )
+
+                    core.logger.bitrix24.info(
+                        f"Таблица 'bitrix_projects' обновлена, добавлено '{len(projects)}' проектов")
+                else:
+                    core.logger.bitrix24.warning("Не удалось получить данные о проектах из Bitrix24")
+                    return False
+
+                return True
+        except Exception:
+            core.logger.bitrix24.error("Не удалось обновить таблицу 'bitrix_projects'", exc_info=True)
+            return False
 
 class DbQueries(core.sys_manager.DatabaseContextManager):
     def __init__(self):
@@ -264,7 +396,7 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                 ''')
                 columns = [column[0] for column in db.cursor.fetchall()]
 
-                # Создаем новый список для данных с дополнительной информацией об устаревании
+                # Создаём новый список для данных с дополнительной информацией об устаревании
                 modified_data = []
                 for row in data:
                     row_dict = dict(zip(columns, row))  # Преобразуем строку в словарь для удобства доступа
@@ -331,7 +463,7 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                 ''')
                 columns = [column[0] for column in db.cursor.fetchall()]
 
-                # Создаем запрос SQL для поиска по всем столбцам
+                # Создаём запрос SQL для поиска по всем столбцам
                 query = "SELECT * FROM pos_fiscals WHERE "
                 conditions = []
 
@@ -341,14 +473,14 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                 # Соединяем условия поиска оператором OR
                 query += " OR ".join(conditions)
 
-                # Создаем список параметров для запроса (по одному '%значение%' на каждый столбец)
+                # Создаём список параметров для запроса (по одному '%значение%' на каждый столбец)
                 params = [f'%{search_query}%'] * len(columns)
 
                 # Выполняем запрос
                 db.cursor.execute(query, params)
                 search_results = db.cursor.fetchall()
 
-                # Создаем новый список для данных с проверкой на устаревание
+                # Создаём новый список для данных с проверкой на устаревание
                 modified_data = []
                 for row in search_results:
                     modified_row = list(row)
@@ -434,6 +566,8 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                 db.cursor.execute(base_query, (start_date, end_date))
                 rows = db.cursor.fetchall()
 
+                core.logger.db_service.debug(
+                    f"Производится поиск клиентов, которым потребуется замена ФН в интервале от '{start_date}' до '{end_date}'")
                 records = []
                 for row in rows:
                     record = dict(
@@ -453,6 +587,9 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                         record['is_marked'] = record['serialNumber'] in marked_records
                         records.append(record)
 
+            core.logger.db_service.debug(
+                f"Поиск клиентов ({len(records)}), которым потребуется замена ФН в интервале от '{start_date}' до '{end_date}', завершён:")
+            core.logger.db_service.debug(f"{records}")
             return records
         except Exception:
             core.logger.db_service.error("Неожиданное исключение при запросе к заканчивающимся ФН", exc_info=True)
@@ -513,7 +650,7 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
         except Exception:
             core.logger.db_service.error("Не удалось сделать поисковый запрос устаревших записей", exc_info=True)
 
-    def toggle_task(self, serial_number, fn_serial, checked):
+    def toggle_task(self, serial_number, fn_serial, checked, bitrix24):
         try:
             with core.sys_manager.DatabaseContextManager() as db:
                 # Создаем таблицу если её нет
@@ -531,14 +668,17 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                            ON CONFLICT ("serialNumber") DO NOTHING''',
                         (serial_number, fn_serial)
                     )
-                    core.logger.db_service.debug(f"Запись '{serial_number}' успешно добавлена в базу")
+                    core.logger.db_service.debug(f"Запись '{serial_number}' успешно добавлена в базу созданных задач")
                 else:
+                    if bitrix24.enabled:
+                        return {'status': 'error'}
+
                     db.cursor.execute(
                         '''DELETE FROM fn_sale_task 
                            WHERE "serialNumber" = %s''',
                         (serial_number,)
                     )
-                    core.logger.db_service.debug(f"Запись '{serial_number}' успешно удалена из базы")
+                    core.logger.db_service.debug(f"Запись '{serial_number}' успешно удалена из базы созданных задач")
 
                 return {'status': 'success'}
 
@@ -546,7 +686,7 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
             core.logger.db_service.error("Ошибка при обновлении таблицы fn_sale_task", exc_info=True)
             return {'status': 'error', 'message': str(e)}
 
-    def update_client_name(self, url_rms, server_name):
+    def edit_client_name(self, url_rms, server_name):
         try:
             with core.sys_manager.DatabaseContextManager() as db:
                 # Создаем таблицу clients если её нет
@@ -579,7 +719,6 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                     ''', (server_name, url_rms))
                 else:
                     # Создаем новую запись
-                    import uuid
                     unique_id = str(uuid.uuid4())
                     db.cursor.execute('''
                         INSERT INTO clients 
@@ -594,3 +733,33 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                 "Ошибка при обновлении имени клиента", exc_info=True
             )
             return {'success': False, 'error': str(e)}
+
+    def get_bitrix_contractors(self, table_name, field_name, last_name):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                query = f'SELECT "id", "NAME", "{last_name}" FROM "{table_name}" WHERE "{field_name}" = 1'
+                db.cursor.execute(query)
+                results = db.cursor.fetchall()
+
+                # Извлекаем id из результатов запроса
+                id_list = []
+                for row in results:
+                    id_value = row[0]
+                    name = row[1] if len(row) > 1 else ""
+                    last_name = row[2] if len(row) > 2 else ""
+
+                    core.logger.db_service.debug(
+                        f"Найдена активная запись в таблице '{table_name}':")
+                    core.logger.db_service.debug(f"ID: {id_value}, Name: {name} {last_name}")
+
+                    id_list.append(id_value)
+
+                if id_list == []:
+                    core.logger.db_service.warning(
+                        f"Не найдено активных записей в таблице '{table_name}'")
+
+                return id_list
+
+        except Exception:
+            core.logger.db_service.error(f"Ошибка при поиске записей в таблице '{table_name}'", exc_info=True)
+            return []

@@ -1,6 +1,6 @@
+import time
 from core.configs import read_config_ini
 import core.logger
-import about
 import os
 import json
 import calendar
@@ -9,20 +9,23 @@ import psycopg2
 import psycopg2.extras
 
 class ResourceManagement:
+    config_path = 'source/config.ini'
+
     def __init__(self):
-        self.config = read_config_ini(about.config_path)
+        self.config = read_config_ini(self.config_path)
 
     def write_json_file(self, config, json_path, file_name):
         file_path = os.path.join(json_path, file_name)
         try:
             with open(file_path, "w", encoding="utf-8") as file:
                 json.dump(config, file, ensure_ascii=False, indent=4)
-            core.logger.web_server.info(f"Данные записаны в '{file_name}'")
+            core.logger.web_server.info(f"Данные записаны в '{file_path}'")
+            core.logger.web_server.debug(f"{config}")
             core.logger.web_server.debug(config)
         except Exception:
             core.logger.web_server.error(f"Не удалось записать данные в '{file_path}'.", exc_info=True)
 
-    def read_json_file(self, folder_name, file_name):
+    def read_json_file(self, folder_name, file_name, data=None, create=False):
         json_file = os.path.join(folder_name, file_name)
         try:
             with open(json_file, "r", encoding="utf-8") as file:
@@ -30,10 +33,14 @@ class ResourceManagement:
                 return config
         except FileNotFoundError:
             core.logger.web_server.warn(f"Файл конфига '{json_file}' отсутствует.")
-            return None
+            if create:
+                self.write_json_file(data, folder_name, file_name)
+                return False
         except json.JSONDecodeError:
             core.logger.web_server.warn(f"Файл конфига '{json_file}' имеет некорректный формат данных")
-            return None
+            if create:
+                self.write_json_file(data, folder_name, file_name)
+                return False
 
     def get_default_dates(self):
         try:
@@ -92,7 +99,6 @@ class DatabaseContextManager(ResourceManagement):
             except psycopg2.OperationalError as e:
                 # Проверяем, что ошибка связана с отсутствием базы данных
                 if "database" in str(e) and "does not exist" in str(e):
-                    # Подключаемся к базе postgres (системная база, всегда существует)
                     temp_conn = psycopg2.connect(
                         dbname='postgres',
                         user=self.user,
@@ -103,7 +109,7 @@ class DatabaseContextManager(ResourceManagement):
                     temp_conn.autocommit = True  # Необходимо для создания БД
                     temp_cursor = temp_conn.cursor()
 
-                    # Создаем новую базу данных
+                    # Создаём новую базу данных
                     temp_cursor.execute(f'CREATE DATABASE "{self.dbname}"')
 
                     # Закрываем временное соединение

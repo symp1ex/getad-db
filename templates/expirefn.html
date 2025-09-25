@@ -189,20 +189,6 @@
             z-index: 1111; /* Убедитесь, что счётчик выше других элементов */
         }
 
-        .notification {
-            position: fixed;
-            top: 70px; /* Положение под шапкой */
-            right: 20px;
-            background-color: #4CAF50;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 4px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            z-index: 1001; /* Выше чем у шапки */
-            display: none;
-            animation: fadeIn 0.3s ease-in;
-        }
-
         .background-layer {
             position: fixed;
             top: 0;
@@ -302,6 +288,28 @@
             text-decoration: underline;
         }
 
+        .notification {
+            position: fixed;
+            top: 67px; /* Положение над шапкой */
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 100001; /* Убедитесь, что значение выше, чем у других элементов */
+            display: none;
+            animation: fadeIn 0.75s ease-in;
+        }
+
+        .notification.success {
+            background-color: #4CAF50;
+        }
+
+        .notification.error {
+            background-color: #f44336;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -314,6 +322,17 @@
         }
     </style>
     <script>
+        function showNotification(message, type) {
+            const notification = document.getElementById('taskNotification');
+            notification.innerHTML = message;
+            notification.className = `notification ${type}`;
+            notification.style.display = 'block';
+
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+        
         function toggleTask(checkbox, serialNumber, fnSerial) {
             fetch('/toggle_task', {
                 method: 'POST',
@@ -325,21 +344,44 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
+                    showNotification('Информация о создании задачи успешно обновлена', 'success');
                     // Если галочка "показать отмеченные" не стоит и мы отметили запись
                     if (!document.querySelector('.marked-filter input[type="checkbox"]').checked && checkbox.checked) {
                         // Находим родительский элемент записи и удаляем его
                         checkbox.closest('.record').remove();
+
+                        const counter = document.querySelector('.record-counter');
+                        let count = parseInt(counter.textContent, 10);
+                        if (!isNaN(count) && count > 0) {
+                            counter.textContent = count - 1;
+                        }
                     }
-                } else {
+                } 
+                else {
                     checkbox.checked = !checkbox.checked;
-                    alert('Произошла ошибка при обновлении статуса');
+                    showNotification('Функция заблокирована интеграцией Битрикс24', 'error');
                 }
             });
         }
 
         function toggleMarkedOnly(checkbox) {
-            window.location.href = `/expire_fn?show_marked_only=${checkbox.checked}&start_date={{ start_date }}&end_date={{ end_date }}`;
+            document.cookie = `show_marked=${checkbox.checked}; path=/; max-age=${60*60*24*180}`;
+            window.location.href = `/expire_fn?show_marked=${checkbox.checked}&start_date={{ start_date }}&end_date={{ end_date }}`;
         }
+
+        function loadMarkedOnlyState() {
+            const cookies = document.cookie.split(';');
+            for(let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if(name === 'show_marked') {
+                    const checkbox = document.querySelector('.marked-filter input[type="checkbox"]');
+                    checkbox.checked = value === 'true';
+                    break;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadMarkedOnlyState);
 
         function copyRecordToClipboard(element) {
             const cells = Array.from(element.children).slice(0, -1);
@@ -447,8 +489,8 @@
             </form>
             <div class="marked-filter">
                 <label>
-                    Показывать отмеченные
-                    <input type="checkbox" {% if show_marked_only %}checked{% endif %}
+                    Показывать созданные задачи
+                    <input type="checkbox" {% if show_marked %}checked{% endif %}
                            onchange="toggleMarkedOnly(this)">
                 </label>
             </div>
@@ -469,6 +511,7 @@
     <div id="notification" class="notification" style="display: none;">
         Скопировано в буфер обмена
     </div>
+    <div id="taskNotification" class="notification" style="display: none;"></div>
 
     <div class="container">
         <div class="table-header">
@@ -496,8 +539,9 @@
             <div>{{ record.dateTime_end }}</div>
             <div class="checkbox-cell">
                 <input type="checkbox"
-                       {% if record.is_marked %}checked{% endif %}
-                       onchange="toggleTask(this, '{{ record.serialNumber }}', '{{ record.fn_serial }}')">
+                    {% if record.is_marked %}checked{% endif %}
+                    onchange="toggleTask(this, '{{ record.serialNumber }}', '{{ record.fn_serial }}')"
+                    onclick="event.stopPropagation();">
             </div>
         </div>
         {% endfor %}

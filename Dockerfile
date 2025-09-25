@@ -11,6 +11,8 @@ COPY static /app/static
 
 COPY core /app/core
 
+COPY integrations /app/integrations
+
 COPY *.py /app/
 
 WORKDIR /app
