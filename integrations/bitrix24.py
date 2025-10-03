@@ -144,6 +144,9 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
             organization_name = task_data.get('organizationName', None)
             inn = task_data.get('INN', None)
             datetime_end = task_data.get('dateTime_end', None)
+            address = task_data.get('address', None)
+            if address == None:
+                address = "Неизвестно"
         except Exception:
             core.logger.bitrix24.error(
                 f"Не удалось импортировать необходимые данные о ККТ для создания задачи", exc_info=True)
@@ -152,12 +155,13 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
         try:
             task_title = f"Кончается ФН {datetime_end}, {client}"
 
-            task_description = (f"Клиент: {client}\n"
+            task_description = (f"Клиент: {client}\n\n"
                                 f"Серийный номер: {serial_number}\n"
                                 f"РНМ: {rnm}\n"
-                                f"Номер ФН: {fn_serial}\n"
+                                f"Номер ФН: {fn_serial}\n\n"
                                 f"Юр.лицо: {organization_name}\n"
                                 f"ИНН: {inn}\n"
+                                f"Адрес места расчётов: {address}\n\n"
                                 f"Дата окончания: {datetime_end}\n")
 
 

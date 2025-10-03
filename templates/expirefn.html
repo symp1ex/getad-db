@@ -384,20 +384,29 @@
         document.addEventListener('DOMContentLoaded', loadMarkedOnlyState);
 
         function copyRecordToClipboard(element) {
-            const cells = Array.from(element.children).slice(0, -1);
-            const headers = [
-                "Клиент",
-                "Серийный номер",
-                "РНМ",
-                "Номер ФН",
-                "Юр.лицо",
-                "ИНН",
-                "Дата окончания"
-            ];
-
-            const text = cells.map((cell, index) =>
-                `${headers[index]}: ${cell.textContent.trim()}`
-            ).join('\n');
+            const cells = Array.from(element.children).slice(0, -2); // Исключаем чекбокс и скрытый адрес
+            const addressElement = element.querySelector('.address-data');
+            const address = addressElement ? addressElement.textContent.trim() : 'Неизвестно';
+            
+            // Собираем данные из ячеек
+            const client = cells[0].textContent.trim();
+            const serialNumber = cells[1].textContent.trim();
+            const rnm = cells[2].textContent.trim();
+            const fnSerial = cells[3].textContent.trim();
+            const organizationName = cells[4].textContent.trim();
+            const inn = cells[5].textContent.trim();
+            const dateTimeEnd = cells[6].textContent.trim();
+            
+            // Формируем текст для копирования с нужным порядком полей
+            const text = 
+                `Клиент: ${client}\n\n` +
+                `Серийный номер: ${serialNumber}\n` +
+                `РНМ: ${rnm}\n` +
+                `Номер ФН: ${fnSerial}\n\n` +
+                `Юр.лицо: ${organizationName}\n` +
+                `ИНН: ${inn}\n` +
+                `Адрес места расчётов: ${address}\n\n` +
+                `Дата окончания: ${dateTimeEnd}`;
 
             // Проверяем доступность Clipboard API
             if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
@@ -440,10 +449,11 @@
 
         let currentUrlRms = '';
 
-        function showClientModal(element, urlRms, serverName) {
+        function showClientModal(element, urlRms, serverName, address) {
             currentUrlRms = urlRms;
             document.getElementById('urlRms').textContent = urlRms;
             document.getElementById('serverName').value = serverName || '';
+            document.getElementById('addressText').textContent = address ? address : 'Неизвестно';
             document.getElementById('clientModal').style.display = 'block';
         }
 
@@ -528,7 +538,7 @@
         {% for record in records %}
         <div class="record" onclick="copyRecordToClipboard(this)">
             <div class="client-name" 
-                onclick="event.stopPropagation(); showClientModal(this, '{{ record.url_rms }}', '{{ record.client }}')">
+                onclick="event.stopPropagation(); showClientModal(this, '{{ record.url_rms }}', '{{ record.client }}', '{{ record.address }}')">
                 {{ record.client if record.client and record.client != 'None' else 'Неизвестно' }}
             </div>
             <div>{{ record.serialNumber }}</div>
@@ -543,24 +553,31 @@
                     onchange="toggleTask(this, '{{ record.serialNumber }}', '{{ record.fn_serial }}')"
                     onclick="event.stopPropagation();">
             </div>
+            <!-- Скрытое поле для адреса -->
+            <div style="display: none;" class="address-data">{{ record.address if record.address else 'Неизвестно' }}</div>
         </div>
         {% endfor %}
     </div>
     <div id="clientModal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-field">
-            <label>Адрес сервера:</label>
-            <span id="urlRms"></span>
-        </div>
-        <div class="modal-field">
-            <label>Клиент:</label>
-            <input type="text" id="serverName">
-        </div>
-        <div class="modal-buttons">
-            <button onclick="saveClientName()">OK</button>
-            <button onclick="closeModal()">Отмена</button>
+        <div class="modal-content">
+            <div class="modal-field">
+                <label>Адрес сервера:</label>
+                <span id="urlRms"></span>
+            </div>
+            <div class="modal-field">
+                <label>Адрес места расчетов:</label>
+                <span id="addressText"></span>
+            </div>
+            <br>
+            <div class="modal-field">
+                <label>Клиент:</label>
+                <input type="text" id="serverName">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="saveClientName()">OK</button>
+                <button onclick="closeModal()">Отмена</button>
+            </div>
         </div>
     </div>
-</div>
 </body>
 </html>

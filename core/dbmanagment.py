@@ -552,7 +552,8 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                            date(pos_fiscals."dateTime_end") as dateTime_end,
                            pos_fiscals."current_time", 
                            pos_fiscals."v_time",
-                           pos_fiscals."url_rms"
+                           pos_fiscals."url_rms",
+                           pos_fiscals."address"
                     FROM pos_fiscals 
                     LEFT JOIN clients ON pos_fiscals."url_rms" = clients."url_rms"
                     WHERE date(pos_fiscals."dateTime_end") >= date(%s) AND date(pos_fiscals."dateTime_end") <= date(%s)
@@ -572,7 +573,7 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
                 for row in rows:
                     record = dict(
                         zip(['serialNumber', 'client', 'RNM', 'fn_serial', 'organizationName', 'INN',
-                             'dateTime_end', 'current_time', 'v_time', 'url_rms'], row))
+                             'dateTime_end', 'current_time', 'v_time', 'url_rms', 'address'], row))
 
                     # Определяем, какое время использовать
                     time_to_check = record['v_time'] if record['v_time'] not in (None, '', 'None') else record[
