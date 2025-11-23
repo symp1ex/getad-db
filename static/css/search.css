@@ -1,0 +1,191 @@
+body {
+	font-family: Arial, sans-serif;
+	margin: 0;
+	padding: 0;
+	background: linear-gradient(135deg, #353535, #555555); /* очень тёмный градиент */
+}
+
+h1 {
+	text-align: center;
+	margin-top: 0px; /* Установлено значение 0 для удаления стандартного отступа для h1 */
+	margin-left: -18px; /* Сдвигаем фон влево */
+	color: white; /* Цвет шрифта */
+	background: linear-gradient(135deg, #333, #666); /* Градиент фона */
+	padding: 15px; /* Отступы вокруг текста */
+	text-align: center; /* Выравнивание текста по центру */
+	border-radius: 5px; /* Скругление углов */
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); /* Тень для эффекта глубины */
+	width: calc(100% + 23px); /* Увеличиваем ширину фона, чтобы компенсировать сдвиг */
+	padding-left: 0px; /* Увеличиваем отступ слева для сдвига текста */
+	position: fixed; /* Делаем заголовок липким */
+	top: 0; /* Позиция при прокрутке */
+	z-index: 10; /* Убедитесь, что заголовок выше других элементов */
+	font-size: 20px;
+}
+
+.home-icon {
+	width: 38px;
+	height: 38px;
+	margin-right: 15px;
+	cursor: pointer;
+	vertical-align: middle;
+	position: fixed; /* Позиционирование счётчика */
+	z-index: 11; /* Убедитесь, что заголовок выше других элементов */
+	right: 0px; /* Увеличиваем отступ слева для сдвига текста */
+	top: 7px;
+}
+
+.home-icon:hover {
+	transform: scale(1.1); /* Небольшая анимация при наведении */
+}
+
+.button-container {
+	text-align: right; /* Выравнивание кнопки по правому краю */
+	margin: 20px; /* Отступы вокруг кнопки */
+}
+
+.row-counter {
+	position: fixed; /* Позиционирование счётчика */
+	right: 55px; /* Отступ от правого края */
+	top: 10px; /* Отступ от верхнего края */
+	padding: 10px;
+	z-index: 11; /* Убедитесь, что счётчик выше других элементов */
+	font-weight: bold;
+	font-size: 12px;
+}
+
+thead {
+	position: sticky;
+	top: 52px; /* Отступ от верха страницы, подстройте под высоту вашего h1 */
+	background-color: #f2f2f2;
+	z-index: 2;
+}
+
+table {
+	border-collapse: separate; /* Меняем с collapse на separate */
+	border-spacing: 0 4px;    /* Добавляем пространство между строками */
+	width: 80%;
+	margin: 20px auto;
+	background-color: transparent; /* Делаем фон таблицы прозрачным */
+}
+
+tr {
+	background-color: #f0f0f0;    /* Белый фон для каждой строки */
+	margin-bottom: 3px;        /* Отступ между строками */
+}
+
+th, td {
+	padding: 14px 7px;
+	text-align: left;
+	border: 0px solid #ddd;    /* Добавляем границу вокруг каждой ячейки */
+}
+
+th {
+	padding: 16px 15px;
+	background-color: #c4c4c4;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	position: relative; /* Для эффекта поднятия */
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для отделения от контента */
+}
+
+th:hover {
+	background-color: #eaeaea; /* Более темный оттенок при наведении */
+	transform: translateY(-1px); /* Легкий подъем */
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для эффекта "всплытия" */
+}
+
+tbody tr {
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Тень для каждой строки */
+}
+
+tbody tr:hover {
+	background-color: #d1dade; /* Цвет при наведении */
+}
+
+.download-button {
+	background-color: #4CAF50;
+	color: white;
+	border: none;
+	padding: 10px 30px;
+	text-align: center;
+	text-decoration: none;
+	display: inline-block;
+	border-radius: 5px;
+	position: fixed; /* Позиционирование кнопки */
+	left: -10px; /* Отступ от правого края */
+	top: 30px; /* Отступ от верхнего края */
+	cursor: pointer;
+	font-weight: bold;
+	z-index: 11; /* Убедитесь, что заголовок выше других элементов */
+}
+
+.download-button:hover {
+	background-color: #388E3C;
+}
+
+.expired-row {
+	background-color: #ffced3; /* бледно-розовый цвет */
+}
+
+/* При наведении делаем цвет немного темнее */
+.expired-row:hover {
+	background-color: #ffafb7;
+}
+
+html {
+	font-size: 80%; /* Уменьшение масштаба на 25% */
+}
+
+.context-menu {
+	display: none;
+	position: absolute;
+	background-color: #f9f9f9;
+	border: 1px solid #ccc;
+	box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+	padding: 10px;
+	z-index: 9;
+}
+
+.context-menu-item {
+	padding: 5px;
+	cursor: pointer;
+}
+
+.context-menu-buttons {
+	margin-top: 10px;
+	text-align: center;
+}
+
+/* Общие стили для кнопок в контекстном меню */
+.context-menu button {
+	margin: 0 5px;
+	padding: 5px 10px;
+	cursor: pointer;
+	border: none;
+	border-radius: 3px;
+	transition: background-color 0.3s;
+}
+
+/* Стиль для кнопки "ОК" */
+.context-menu button:first-child {
+	background-color: #4CAF50;
+	color: white;
+}
+
+.context-menu button:first-child:hover {
+	background-color: #388E3C;
+}
+
+/* Стиль для кнопки "Отмена" */
+.context-menu button:last-child {
+	background-color: #f44336;
+	color: white;
+}
+
+.context-menu button:last-child:hover {
+	background-color: #d32f2f;
+}
+.hidden-column {
+	display: none;
+}
