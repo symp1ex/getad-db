@@ -751,6 +751,62 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
             )
             return {'success': False, 'error': str(e)}
 
+    def clean_obsolete_clients(self):
+        core.logger.db_service.info("Будет произведена очистка базы клиентов")
+
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Получаем все url_rms из pos_fiscals
+                db.cursor.execute('''
+                    SELECT DISTINCT "url_rms" 
+                    FROM pos_fiscals 
+                    WHERE "url_rms" IS NOT NULL AND "url_rms" != ''
+                ''')
+                pos_fiscals_urls = {row[0] for row in db.cursor.fetchall()}
+
+                # Получаем все записи из clients
+                db.cursor.execute('''
+                    SELECT "id", "url_rms" 
+                    FROM clients
+                    WHERE "url_rms" IS NOT NULL AND "url_rms" != ''
+                ''')
+                clients_records = db.cursor.fetchall()
+
+                # Находим url_rms, которые есть в clients, но отсутствуют в pos_fiscals
+                clients_to_delete = []
+                clients_to_delete_list = []
+                for client_id, client_url in clients_records:
+                    if client_url not in pos_fiscals_urls:
+                        clients_to_delete.append(client_id)
+                        clients_to_delete_list.append(client_url)
+
+                core.logger.db_service.debug("Список клиентов подлежащий удалению:")
+                core.logger.db_service.debug(clients_to_delete_list)
+
+                # Если есть записи для удаления
+                if clients_to_delete:
+                    core.logger.db_service.info(
+                        f"Начато удаление ({len(clients_to_delete)}) устаревших записей из таблицы 'clients'")
+
+                    # Удаляем записи
+                    placeholders = ','.join(['%s'] * len(clients_to_delete))
+                    db.cursor.execute(
+                        f'''DELETE FROM clients WHERE "id" IN ({placeholders})''',
+                        tuple(clients_to_delete)
+                    )
+
+                    core.logger.db_service.info(
+                        f"Успешно удалено ({len(clients_to_delete)}) устаревших записей из таблицы 'clients'")
+                else:
+                    core.logger.db_service.info(
+                        "Устаревшие записи в таблице 'clients' не найдены")
+
+                core.logger.db_service.info(
+                    f"Очистка базы клиентов завершена, следующая очистка через '24' часа")
+        except Exception:
+            core.logger.db_service.error(
+                "Не удалось выполнить очистку устаревших записей из таблицы 'clients'", exc_info=True)
+
     def get_bitrix_contractors(self, table_name, field_name, last_name):
         try:
             with core.sys_manager.DatabaseContextManager() as db:
@@ -781,13 +837,10 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
             return []
 
     def select_bitrix_contractors(self, responsible_id, observers_id):
+        self.reset_bitrix_contractors()
+
         try:
             with core.sys_manager.DatabaseContextManager() as db:
-                # Сбрасываем все значения responsible
-                db.cursor.execute('UPDATE bitrix_employees SET responsible = 0')
-                # Сбрасываем все значения observers
-                db.cursor.execute('UPDATE bitrix_projects SET observers = 0')
-
                 if not responsible_id == None:
                     # Устанавливаем значение responsible для выбранного сотрудника
                     db.cursor.execute('UPDATE bitrix_employees SET responsible = 1 WHERE id = %s', (responsible_id,))
@@ -798,6 +851,18 @@ class DbQueries(core.sys_manager.DatabaseContextManager):
         except Exception:
             core.logger.db_service.error(
                 "Ошибка при обновлении записей в таблицах 'bitrix_employees' и 'bitrix_projects'", exc_info=True)
+
+    def reset_bitrix_contractors(self):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Сбрасываем все значения responsible
+                db.cursor.execute('UPDATE bitrix_employees SET responsible = 0')
+                # Сбрасываем все значения observers
+                db.cursor.execute('UPDATE bitrix_projects SET observers = 0')
+                core.logger.db_service.debug("Списки ответственного сотрудника и группы наблюдателей сброшены")
+        except Exception:
+            core.logger.db_service.error(
+                "Ошибка при сбросе записей в таблицах 'bitrix_employees' и 'bitrix_projects'", exc_info=True)
 
     def get_list_bitrix_contractors(self):
         try:

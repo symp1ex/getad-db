@@ -107,9 +107,14 @@ class IikoRms(core.sys_manager.DatabaseContextManager):
                 f"Произошла ошибка при попытке добавить нового клиента в базу", exc_info=True)
 
     def update_clients_info_on_schedule(self):
-        time.sleep(86400)
+        import core.dbmanagment
+        dbqueries = core.dbmanagment.DbQueries()
 
         while True:
+            dbqueries.clean_obsolete_clients()
+
+            time.sleep(86400)
+
             core.logger.clients_update.info(f"Начато обновление базы клиентов")
             try:
                 with core.sys_manager.DatabaseContextManager() as db:
