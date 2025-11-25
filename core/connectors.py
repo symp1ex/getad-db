@@ -36,26 +36,83 @@ class IikoRms(core.sys_manager.DatabaseContextManager):
     def __init__(self):
         super().__init__()
 
-    def update_clients_info(self):
+    def add_new_clients(self, url_rms, inn, org_name):
+        try:
+            with core.sys_manager.DatabaseContextManager() as db:
+                # Создаём таблицу clients, если она не существует
+                db.cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS clients (
+                            "id" TEXT PRIMARY KEY,
+                            "url_rms" TEXT,
+                            "INN" TEXT,
+                            "organizationName" TEXT,
+                            "serverName" TEXT,
+                            "version" TEXT,
+                            "manual_edit" INTEGER DEFAULT 0,
+                            "last_updated" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                db.conn.commit()
+
+                # Проверяем существование записи в clients
+                db.cursor.execute('''
+                        SELECT "id" FROM clients 
+                        WHERE "url_rms" = %s
+                    ''', (url_rms,))
+                existing_client = db.cursor.fetchone()
+
+                if not existing_client:
+                    for attempt in range(5):
+                        # Запрашиваем данные о сервере
+                        try:
+                            monitoring_url = f"{url_rms.rstrip('/')}/getServerMonitoringInfo.jsp"
+                            response = requests.get(monitoring_url, timeout=20)
+
+                            if response.status_code == 200:
+                                json_resp = response.json()
+                                server_name = json_resp.get('serverName', '')
+                                version = json_resp.get('version', '')
+
+                                # Добавляем запись в clients
+                                unique_id = str(uuid.uuid4())
+                                db.cursor.execute('''
+                                        INSERT INTO clients 
+                                        ("id", "url_rms", "INN", "organizationName", "serverName", "version", "manual_edit") 
+                                        VALUES (%s, %s, %s, %s, %s, %s, 0)
+                                    ''', (unique_id, url_rms, inn, org_name, server_name, version))
+                                core.logger.clients_update.debug(f"Добавлена запись в 'clients' для {url_rms}")
+                                time.sleep(1)
+                                break
+                        except Exception as e:
+                            current_attempt = attempt + 1
+                            if attempt < 4:
+                                core.logger.clients_update.warning(f"Ошибка при запросе ({current_attempt}) к "
+                                                                   f"'{url_rms}': {str(e)}"
+                                                                   f"Следующая попытка через '5' секунд")
+                                time.sleep(5)
+                                continue
+
+                            core.logger.clients_update.error(f"Не удалось получить имя клиента после '5' попыток",
+                                                             exc_info=True)
+                            # Добавляем запись без serverName и version
+                            unique_id = str(uuid.uuid4())
+                            db.cursor.execute('''
+                                    INSERT INTO clients 
+                                    ("id", "url_rms", "INN", "organizationName", "serverName", "version", "manual_edit") 
+                                    VALUES (%s, %s, %s, %s, %s, %s, 0)
+                                ''', (unique_id, url_rms, inn, org_name, None, None))
+                            core.logger.clients_update.debug(f"Добавлена запись с 'None' для '{url_rms}'")
+        except Exception:
+            core.logger.clients_update.error(
+                f"Произошла ошибка при попытке добавить нового клиента в базу", exc_info=True)
+
+    def update_clients_info_on_schedule(self):
+        time.sleep(86400)
+
         while True:
             core.logger.clients_update.info(f"Начато обновление базы клиентов")
             try:
                 with core.sys_manager.DatabaseContextManager() as db:
-                    # Создаем таблицу clients, если она не существует
-                    db.cursor.execute('''
-                            CREATE TABLE IF NOT EXISTS clients (
-                                "id" TEXT PRIMARY KEY,
-                                "url_rms" TEXT,
-                                "INN" TEXT,
-                                "organizationName" TEXT,
-                                "serverName" TEXT,
-                                "version" TEXT,
-                                "manual_edit" INTEGER DEFAULT 0,
-                                "last_updated" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )
-                        ''')
-                    db.conn.commit()
-
                     # Получаем все url_rms, INN и organizationName из pos_fiscals
                     db.cursor.execute('''
                             SELECT DISTINCT "url_rms", "INN", "organizationName" 
@@ -127,12 +184,12 @@ class IikoRms(core.sys_manager.DatabaseContextManager):
                                         VALUES (%s, %s, %s, %s, %s, %s, 0)
                                     ''', (unique_id, url_rms, inn, org_name, None, None))
                                 db.conn.commit()
-                                core.logger.clients_update.debug(f"Добавлена запись с None для {url_rms}")
+                                core.logger.clients_update.debug(f"Добавлена запись с 'None' для {url_rms}")
                             time.sleep(1.5)
                             continue
                 core.logger.clients_update.info(
-                    f"Обновление базы клиентов завершено, следующее обновление через '12' часов")
-                time.sleep(43200)
+                    f"Обновление базы клиентов завершено, следующее обновление через '24' часа")
+                time.sleep(60)
             except Exception:
                 core.logger.db_service.error(
                     "Ошибка при обновлении информации о клиентах, следующая попытка через '5' минут", exc_info=True)

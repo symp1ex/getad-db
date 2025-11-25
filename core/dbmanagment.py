@@ -55,7 +55,7 @@ class DbUpdate(core.sys_manager.DatabaseContextManager):
                     self.clean_fn_sale_task()
 
                     if self.clients_update_process == 0:
-                        update_clients_info_thread = threading.Thread(target=iikorms.update_clients_info, daemon=True)
+                        update_clients_info_thread = threading.Thread(target=iikorms.update_clients_info_on_schedule, daemon=True)
                         update_clients_info_thread.start()
                         self.clients_update_process = 1
 
@@ -156,6 +156,13 @@ class DbUpdate(core.sys_manager.DatabaseContextManager):
                 try:
                     # Вставка данных
                     for filename, json_data in data.items():
+                        # Проверяем существование записи в pos_fiscals
+                        db.cursor.execute('''
+                            SELECT "serialNumber" FROM pos_fiscals 
+                            WHERE "serialNumber" = %s
+                        ''', (filename,))
+                        existing_record = db.cursor.fetchone()
+
                         # Проверка и добавление новых столбцов
                         for key, value in json_data.items():
                             if key.lower() not in existing_columns:
@@ -195,6 +202,15 @@ class DbUpdate(core.sys_manager.DatabaseContextManager):
                                    VALUES (%s)
                                    ON CONFLICT ("serialNumber") DO NOTHING''',
                                 (filename,))
+
+                        # Если запись новая и есть url_rms - добавляем в таблицу clients
+                        if not existing_record and 'url_rms' in json_data and json_data['url_rms']:
+                            url_rms = json_data['url_rms']
+                            inn = json_data.get('INN', '')
+                            org_name = json_data.get('organizationName', '')
+
+                            iikorms.add_new_clients(url_rms, inn, org_name)
+
                     core.logger.db_service.debug(f"Запись '{filename}' успешно добавлена в базу")
                 except Exception:
                     core.logger.db_service.error(f"Файл уже был удалён", exc_info=True)
