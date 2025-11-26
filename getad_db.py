@@ -393,9 +393,33 @@ class WebServerRoute(WebServerSetup):
             core.logger.web_server.error("Не удалось сохранить данные о лицензиях", exc_info=True)
 
     def logout(self):
-        response = make_response('', 401)  # Код 401 = Unauthorized
-        response.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
-        return response
+        try:
+            # Создаем HTML-ответ с JavaScript для автоматической переадресации
+            html = '''
+            <html>
+            <head>
+                <title>Выход из системы</title>
+                <script>
+                    setTimeout(function() {
+                        window.location.href = '/';
+                    }, 1000); // 1000 мс = 1 сек
+                </script>
+            </head>
+            <body>
+                <p>Выполняется выход из системы</p>
+            </body>
+            </html>
+            '''
+
+            # Создаем ответ с кодом 401
+            response = make_response(html, 401)
+            response.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
+
+            return response
+        except Exception:
+            core.logger.web_server.error("Ошибка при выходе из системы", exc_info=True)
+            return "Ошибка при выходе из системы", 500
+
 
 
 if __name__ == "__main__":
