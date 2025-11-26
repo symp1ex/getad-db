@@ -172,46 +172,46 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
                 'CREATED_BY': self.author_task
             }
 
-            print(task_title)
-            print("")
-            print(task_description)
-            db_queries.toggle_task(serial_number, fn_serial, True, self)
+            # print(task_title)
+            # print("")
+            # print(task_description)
+            # db_queries.toggle_task(serial_number, fn_serial, True, self)
 
-            # # Добавляем группу к задаче, если указана
-            # if self.groups_observers:
-            #     task_fields['GROUP_ID'] = self.groups_observers
-            #
-            # task_data = {'fields': task_fields}
-            #
-            # attempt = 0
-            # while attempt < self.count_attempts:
-            #     try:
-            #         response = requests.post(
-            #             f"{self.webhook_url}tasks.task.add",
-            #             json=task_data,
-            #             headers={
-            #                 "Content-Type": "application/json",
-            #                 "Accept": "application/json"
-            #             }
-            #         )
-            #         break
-            #     except Exception:
-            #         core.logger.bitrix24.warning(
-            #             f"Ошибка при запросе ({attempt + 1}) на создание задачи Битрикс24, "
-            #             f"следующая попытка через '{self.timeout}' секунд", exc_info=True)
-            #     attempt += 1
-            #     if attempt < self.count_attempts:
-            #         time.sleep(self.timeout)
-            #     else:
-            #         break
-            #
-            # core.logger.bitrix24.info(f"Отправлен запрос на создание задачи для клиента: '{client}'")
-            # core.logger.bitrix24.info(f"Status Code: {response.status_code}")
-            # core.logger.bitrix24.debug("Response:")
-            # core.logger.bitrix24.debug(response.json())
-            # core.logger.bitrix24.debug(f"Задача успешно создана:\n{task_title}\n\n{task_description}")
-            # if response.status_code == 200:
-            #     db_queries.toggle_task(serial_number, fn_serial, True, self)
+            # Добавляем группу к задаче, если указана
+            if self.groups_observers:
+                task_fields['GROUP_ID'] = self.groups_observers
+            
+            task_data = {'fields': task_fields}
+            
+            attempt = 0
+            while attempt < self.count_attempts:
+                try:
+                    response = requests.post(
+                        f"{self.webhook_url}tasks.task.add",
+                        json=task_data,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        }
+                    )
+                    break
+                except Exception:
+                    core.logger.bitrix24.warning(
+                        f"Ошибка при запросе ({attempt + 1}) на создание задачи Битрикс24, "
+                        f"следующая попытка через '{self.timeout}' секунд", exc_info=True)
+                attempt += 1
+                if attempt < self.count_attempts:
+                    time.sleep(self.timeout)
+                else:
+                    break
+            
+            core.logger.bitrix24.info(f"Отправлен запрос на создание задачи для клиента: '{client}'")
+            core.logger.bitrix24.info(f"Status Code: {response.status_code}")
+            core.logger.bitrix24.debug("Response:")
+            core.logger.bitrix24.debug(response.json())
+            core.logger.bitrix24.debug(f"Задача успешно создана:\n{task_title}\n\n{task_description}")
+            if response.status_code == 200:
+                db_queries.toggle_task(serial_number, fn_serial, True, self)
         except Exception:
             core.logger.bitrix24.error(f"Создание задачи задачи в Битрикс24 завершилось неудачей", exc_info=True)
 
