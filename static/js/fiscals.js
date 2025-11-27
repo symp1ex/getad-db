@@ -37,6 +37,20 @@ function updateRowCounter() {
 	document.getElementById("row-counter").innerText = " " + rowCount;
 }
 
+function setColumnClickHandlers() {
+    var headers = document.querySelectorAll("th");
+    headers.forEach(function(header, index) {
+        if (index === 0) return; // Пропускаем столбец с чекбоксами
+        header.addEventListener("click", function() {
+            sortTable(index);
+        });
+    });
+}
+
+window.addEventListener("load", function() {
+    setColumnClickHandlers();
+});
+
 function downloadTXT(data, filename) {
 	var text = data.toString();
 	var blob = new Blob([text], { type: "text/plain" });
@@ -50,6 +64,7 @@ function downloadTXT(data, filename) {
 	URL.revokeObjectURL(url);
 }
 
+// Функция для генерации и загрузки CSV-файла
 function downloadCSV() {
 	var table = document.getElementById("data-table");
 	var rows = table.rows;
@@ -61,11 +76,13 @@ function downloadCSV() {
 	for (var j = 1; j < rows[0].cells.length; j++) {
 		var cell = rows[0].cells[j];
 		if (!cell.classList.contains('hidden-column')) {
-			headers.push(cell.innerText);
+			// Извлекаем текст заголовка без иконки фильтра
+			var headerText = cell.textContent.replace(/[▼⌘⯆]/g, '').trim();
+			headers.push(headerText);
 			visibleColumnIndexes.push(j);
 		}
 	}
-	csvContent += headers.join(";") + "\r\n";
+	csvContent += headers.join(";") + "\r\n";;
 
 	// Добавляем выбранные строки данных, только для видимых столбцов
 	for (var i = 1; i < rows.length; i++) {
@@ -154,7 +171,7 @@ Array.from(headers).forEach((header, index) => {
 Array.from(headers).forEach((header, index) => {
 	if (index === 0) return; // Пропускаем столбец с чекбоксами
 	
-	const columnName = header.textContent.trim();
+	const columnName = header.textContent.replace(/[▼⌘⯆]/g, '').trim();
 	
 	// Используем сохраненное состояние или значение по умолчанию
 	if (savedStates && savedStates[index] !== undefined) {
@@ -214,7 +231,9 @@ function showContextMenu(x, y) {
 		
 		const label = document.createElement('label');
 		label.appendChild(checkbox);
-		label.appendChild(document.createTextNode(' ' + header.textContent));
+		// Получаем только текст заголовка, исключая иконку
+		const headerText = header.textContent.replace('⯆', '').trim();
+		label.appendChild(document.createTextNode(' ' + headerText));
 		
 		item.appendChild(label);
 		contextMenu.appendChild(item);
@@ -336,4 +355,150 @@ document.addEventListener('DOMContentLoaded', function() {
 			console.error('Ошибка при разборе данных о лицензиях:', e);
 		}
 	});
+});
+
+// Объект для хранения текущих фильтров
+const activeFilters = {};
+let currentColumnIndex = -1;
+
+// Функция для отображения фильтр-меню
+function showFilterMenu(event, columnIndex) {
+    event.stopPropagation(); // Предотвращаем всплытие события
+    
+    const filterMenu = document.getElementById('filter-menu');
+    const filterInput = document.getElementById('filter-input');
+    const filterType = document.getElementById('filter-type');
+    
+    // Получаем позицию для меню
+    const rect = event.target.getBoundingClientRect();
+    
+    // Определяем размеры окна и меню
+    const windowWidth = window.innerWidth;
+    const menuWidth = 250; // Ширина меню из CSS
+    
+    // Рассчитываем позицию слева
+    let leftPos = rect.left;
+    
+    // Проверяем, не выходит ли меню за правый край экрана
+    if (leftPos + menuWidth > windowWidth) {
+        // Если выходит, смещаем меню влево на необходимую величину
+        leftPos = windowWidth - menuWidth - 20; // 20px - отступ от края
+    }
+    
+    // Применяем позицию
+    filterMenu.style.left = leftPos + 'px';
+    filterMenu.style.top = (rect.bottom + window.scrollY) + 'px';
+    
+    // Устанавливаем текущий индекс столбца
+    currentColumnIndex = columnIndex;
+    
+    // Если для этого столбца уже есть фильтр, заполняем поля
+    if (activeFilters[columnIndex]) {
+        filterInput.value = activeFilters[columnIndex].text;
+        filterType.value = activeFilters[columnIndex].type;
+    } else {
+        filterInput.value = '';
+        filterType.value = 'include';
+    }
+    
+    // Показываем меню
+    filterMenu.style.display = 'block';
+}
+
+// Функция для скрытия фильтр-меню
+function hideFilterMenu() {
+    const filterMenu = document.getElementById('filter-menu');
+    filterMenu.style.display = 'none';
+}
+
+// Функция применения фильтра
+function applyFilter() {
+    const filterText = document.getElementById('filter-input').value.toLowerCase();
+    const filterType = document.getElementById('filter-type').value;
+    
+    if (currentColumnIndex >= 0) {
+        // Сохраняем фильтр
+        activeFilters[currentColumnIndex] = {
+            text: filterText,
+            type: filterType
+        };
+        
+        // Применяем все фильтры
+        applyAllFilters();
+        
+        // Помечаем столбец как отфильтрованный
+        const headers = document.querySelectorAll('th');
+        if (headers[currentColumnIndex]) {
+            headers[currentColumnIndex].classList.add('filtered-column');
+        }
+    }
+    
+    hideFilterMenu();
+    updateRowCounter(); // Обновляем счётчик строк
+}
+
+// Функция сброса текущего фильтра
+function clearFilter() {
+    if (currentColumnIndex >= 0) {
+        // Удаляем фильтр
+        delete activeFilters[currentColumnIndex];
+        
+        // Применяем оставшиеся фильтры
+        applyAllFilters();
+        
+        // Удаляем метку с отфильтрованного столбца
+        const headers = document.querySelectorAll('th');
+        if (headers[currentColumnIndex]) {
+            headers[currentColumnIndex].classList.remove('filtered-column');
+        }
+    }
+    
+    hideFilterMenu();
+    updateRowCounter(); // Обновляем счётчик строк
+}
+
+// Функция применения всех активных фильтров
+function applyAllFilters() {
+    const table = document.getElementById('data-table');
+    const rows = table.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        let shouldShow = true;
+        
+        // Проверяем каждый активный фильтр
+        Object.keys(activeFilters).forEach(columnIndex => {
+            const filter = activeFilters[columnIndex];
+            const cellText = row.cells[parseInt(columnIndex)].textContent.toLowerCase();
+            
+            if (filter.type === 'include') {
+                // Включающий фильтр
+                if (!cellText.includes(filter.text)) {
+                    shouldShow = false;
+                }
+            } else {
+                // Исключающий фильтр
+                if (cellText.includes(filter.text)) {
+                    shouldShow = false;
+                }
+            }
+        });
+        
+        // Показываем или скрываем строку
+        row.classList.toggle('filtered-out', !shouldShow);
+    });
+}
+
+// Обновляем функцию обновления счётчика строк
+function updateRowCounter() {
+    var table = document.getElementById("data-table");
+    var visibleRows = table.querySelectorAll('tbody tr:not(.filtered-out)').length;
+    document.getElementById("row-counter").innerText = " " + visibleRows;
+}
+
+// Закрываем фильтр-меню при клике вне его
+document.addEventListener('click', function(e) {
+    const filterMenu = document.getElementById('filter-menu');
+    if (filterMenu && filterMenu.style.display === 'block' && !filterMenu.contains(e.target) && !e.target.classList.contains('filter-icon')) {
+        hideFilterMenu();
+    }
 });

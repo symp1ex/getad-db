@@ -96,11 +96,10 @@ class WebServerSetup(core.sys_manager.ResourceManagement):
 
         return decorated
 
-
 class WebServerRoute(WebServerSetup):
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial', 'dateTime_end',
                                'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
-                               'installed_driver', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
+                               'licenses', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
     def __init__(self):
         super().__init__()
         self.register_routes()

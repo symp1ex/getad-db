@@ -195,3 +195,111 @@ html {
 	border: none;
 	border-top: 1px solid #ccc;
 }
+
+/* Стили для заголовка столбца */
+.column-header {
+    position: relative; /* Для абсолютного позиционирования иконки */
+    padding-right: 15px; /* Оставляем место для иконки */
+    width: 100%; /* Занимаем всю доступную ширину */
+    text-align: left; /* Выравниваем текст по левому краю */
+}
+
+.filter-icon {
+    position: absolute; /* Абсолютное позиционирование */
+    top: -16px; /* Отступ от верха */
+    right: 4px; /* Отступ от правого края */
+    cursor: pointer;
+    font-size: 13px; /* Размер иконки */
+    z-index: 3; /* Убедимся, что иконка поверх всего */
+    pointer-events: auto; /* Обеспечиваем обработку событий для иконки */
+}
+
+.filter-icon:hover {
+    transform: scale(1.2);
+}
+
+/* Стили для фильтр-меню */
+.filter-menu {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    padding: 12px;
+    z-index: 9;
+    width: 250px;
+    top: 1em;
+}
+
+.filter-header {
+    font-weight: bold;
+    margin-bottom: 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #ddd;
+}
+
+#filter-input {
+    box-sizing: border-box; /* Учитывает padding и border в общей ширине */
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 1px solid #ccc;
+}
+
+#filter-type {
+    box-sizing: border-box; /* Также добавляем для селекта */
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+}
+
+.filter-buttons {
+    display: flex;
+    justify-content: space-between;
+}
+
+.filter-buttons button {
+    padding: 5px 10px;
+    cursor: pointer;
+    border: none;
+    border-radius: 3px;
+    transition: background-color 0.3s;
+}
+
+.filter-buttons button:nth-child(1) {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.filter-buttons button:nth-child(1):hover {
+    background-color: #388E3C;
+}
+
+.filter-buttons button:nth-child(2) {
+    background-color: #2196F3;
+    color: white;
+}
+
+.filter-buttons button:nth-child(2):hover {
+    background-color: #1976D2;
+}
+
+.filter-buttons button:nth-child(3) {
+    background-color: #f44336;
+    color: white;
+}
+
+.filter-buttons button:nth-child(3):hover {
+    background-color: #d32f2f;
+}
+
+/* Стиль для отфильтрованных строк */
+.filtered-out {
+    display: none;
+}
+
+/* Стиль для столбцов с активными фильтрами */
+.filtered-column {
+    background-color: #e3f2fd;
+}

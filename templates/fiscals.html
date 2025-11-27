@@ -23,14 +23,19 @@
     </div>
     <div class="row-counter" id="row-counter"> 0</div> <!-- Счётчик строк -->
     <table id="data-table">
-        <thead>
-            <tr>
-                <th><input type="checkbox" onclick="toggleCheckboxes(this)"></th> <!-- Чекбокс для выбора всех -->
-                {% for column in columns %}
-                <th onclick="sortTable({{ loop.index }})">{{ column }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
+            <thead>
+                <tr>
+                    <th><input type="checkbox" onclick="toggleCheckboxes(this)"></th> <!-- Чекбокс для выбора всех -->
+                    {% for column in columns %}
+                    <th>
+                        <div class="column-header">
+                            {{ column }}
+                            <span class="filter-icon" onclick="showFilterMenu(event, {{ loop.index }})">⯆</span>
+                        </div>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
         <br>
         <tbody>
             {% for row in data %}
@@ -51,5 +56,18 @@
             {% endfor %}
         </tbody>
     </table>
+    <div id="filter-menu" class="filter-menu">
+    <div class="filter-header">Фильтр</div>
+    <input type="text" id="filter-input" placeholder="Введите текст для поиска...">
+    <select id="filter-type">
+        <option value="include">Включающий (содержит)</option>
+        <option value="exclude">Исключающий (не содержит)</option>
+    </select>
+    <div class="filter-buttons">
+        <button onclick="applyFilter()">Применить</button>
+        <button onclick="clearFilter()">Сбросить</button>
+        <button onclick="hideFilterMenu()">Отмена</button>
+    </div>
+</div>
 </body>
 </html>
