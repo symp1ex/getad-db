@@ -1,7 +1,7 @@
 import core.logger
 import core.configs
 from core.connectors import FtpContextManager
-from core.sys_manager import DatabaseContextManager
+from core.dbmanagement import DatabaseContextManager
 import about
 from datetime import datetime
 import threading

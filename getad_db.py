@@ -1,11 +1,12 @@
 import core.logger
 import core.configs
 import core.sys_manager
+import core.connectors
 import integrations.bitrix24
 import about
 import os, json
 import time
-import core.dbmanagment
+import core.dbmanagement
 from flask import Flask, render_template, request, jsonify
 import multiprocessing
 import eventlet
@@ -18,9 +19,11 @@ import configparser
 import threading
 
 
-db_update = core.dbmanagment.DbUpdate()
-db_queries = core.dbmanagment.DbQueries()
+db_update = core.dbmanagement.DbUpdate()
+db_queries = core.dbmanagement.DbQueries()
 bitrix24 = integrations.bitrix24.Bitrix24Task()
+api_connector = core.connectors.ApiConnector()
+api_method = core.connectors.ApiMethod()
 
 
 class WebServerSetup(core.sys_manager.ResourceManagement):
@@ -128,6 +131,25 @@ class WebServerRoute(WebServerSetup):
         self.app.add_url_rule('/download_license/<int:index>', 'download_license',
                               self.requires_auth(self.download_license), methods=['GET'])
         self.app.add_url_rule('/logout', 'logout', self.logout, methods=['GET'])
+        self.app.add_url_rule('/add_api_key', 'add_api_key',
+                              self.requires_auth_admin(self.add_api_key),
+                              methods=['POST'])
+        self.app.add_url_rule('/get_api_keys', 'get_api_keys',
+                              self.requires_auth_admin(self.get_api_keys),
+                              methods=['GET'])
+        self.app.add_url_rule('/toggle_api_key', 'toggle_api_key',
+                              self.requires_auth_admin(self.toggle_api_key),
+                              methods=['POST'])
+
+        self.app.add_url_rule(
+            '/api/submit_json', 'submit_json', api_connector.requires_admin_api_key(api_method.submit_json),
+            methods=['POST'])
+        self.app.add_url_rule('/api/get_serial_numbers', 'get_serial_numbers',
+                              api_connector.requires_api_key(api_method.get_serial_numbers),
+                              methods=['GET'])
+        self.app.add_url_rule('/api/get_fiscals_data', 'get_fiscals_data',
+                              api_connector.requires_api_key(api_method.get_fiscals_data),
+                              methods=['GET'])
 
     def index(self):
         return render_template('index.html')
@@ -142,7 +164,7 @@ class WebServerRoute(WebServerSetup):
                                enumerate=enumerate)
 
     def pos(self):
-        data, columns = db_queries.only_pos()
+        data, columns = db_queries.get_only_pos()
         return render_template('pos.html', data=data, columns=columns)
 
     def search(self):
@@ -391,6 +413,52 @@ class WebServerRoute(WebServerSetup):
         except Exception:
             core.logger.web_server.error("Не удалось сохранить данные о лицензиях", exc_info=True)
 
+    def add_api_key(self):
+        try:
+            data = request.get_json()
+            name = data.get('name')
+            admin_tag = data.get('admin_tag', 0)
+
+            if not name:
+                return jsonify({'success': False, 'error': 'Имя не может быть пустым'})
+
+            result = db_queries.add_api_key(name, admin_tag)
+
+            # После создания нового ключа обновляем список API-ключей
+            api_connector.update_api_keys()
+
+            return jsonify(result)
+        except Exception as e:
+            core.logger.web_server.error("Ошибка при создании API-ключа", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)})
+
+    def get_api_keys(self):
+        try:
+            show_deleted = request.args.get('show_deleted', 'false').lower() == 'true'
+            keys = db_queries.get_api_key(0, show_deleted, True)
+            return jsonify({'success': True, 'keys': keys})
+        except Exception as e:
+            core.logger.web_server.error("Ошибка при получении списка API-ключей", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)})
+
+    def toggle_api_key(self):
+        try:
+            data = request.get_json()
+            api_key = data.get('api_key')
+            active = data.get('active')
+
+            if not api_key:
+                return jsonify({'success': False, 'error': 'API-ключ не указан'})
+
+            db_queries.remove_api_key(active, api_key)
+            # После изменения статуса ключа обновляем список API-ключей
+            api_connector.update_api_keys()
+
+            return jsonify({'success': True})
+        except Exception as e:
+            core.logger.web_server.error("Ошибка при изменении статуса API-ключа", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)})
+
     def logout(self):
         try:
             # Создаем HTML-ответ с JavaScript для автоматической переадресации
@@ -433,4 +501,5 @@ if __name__ == "__main__":
     server_process.daemon = True
     server_process.start()
 
+    api_connector.update_api_keys()
     webserver.webserver()

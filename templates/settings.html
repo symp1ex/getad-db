@@ -26,6 +26,7 @@
     <div class="container">
         <div class="tabs">
             <button class="tab active" onclick="switchTab('settings')">Настройки</button>
+            <button class="tab" onclick="switchTab('api')">API</button>
             <button class="tab" onclick="switchTab('integrations')">Интеграции</button>
             <button class="tab" onclick="switchTab('files')">Файлы</button>
         </div>
@@ -127,18 +128,30 @@
 
                 <div class="settings-group">
                     <h3>Настройки FTP</h3>
+                    <div class="setting-item setting-item-checkbox">
+                        <label for="ftp_backup">Резервное копирование на FTP</label>
+                        <input type="checkbox" id="ftp_backup" name="ftp-connect.ftp_backup" 
+                            {% if config['ftp-connect']['ftp_backup'] == '1' %}checked{% endif %}
+                            value="1">
+                    </div>
+                    <div class="setting-item setting-item-checkbox">
+                        <label for="ftp_update">Обновление базы с FTP</label>
+                        <input type="checkbox" id="ftp_update" name="ftp-connect.ftp_update" 
+                            {% if config['ftp-connect']['ftp_update'] == '1' %}checked{% endif %}
+                            value="1">
+                    </div>
                     <div class="setting-item">
-                        <label for="ftpHost">FTP хост</label>
+                        <label for="ftpHost">FTP-хост</label>
                         <input type="text" id="ftpHost" name="ftp-connect.ftpHost"
                                value="{{ config['ftp-connect']['ftpHost'] }}">
                     </div>
                     <div class="setting-item">
-                        <label for="ftpUser">FTP пользователь</label>
+                        <label for="ftpUser">FTP-пользователь</label>
                         <input type="text" id="ftpUser" name="ftp-connect.ftpUser"
                                value="{{ config['ftp-connect']['ftpUser'] }}">
                     </div>
                     <div class="setting-item">
-                        <label for="ftpPass">FTP пароль</label>
+                        <label for="ftpPass">FTP-пароль</label>
                         <input type="password" id="ftpPass" name="ftp-connect.ftpPass"
                                placeholder="••••••••••••••••">
                     </div>
@@ -150,7 +163,57 @@
                 </div>
             </form>
         </div>
-
+        <div id="api" class="tab-content">
+            <div class="settings-group">
+                <h3>Управление API-ключами</h3>
+                <div class="api-controls">
+                    <button id="createApiKey" class="button button-primary">Новый API-ключ</button>
+                    <div class="setting-item setting-item-checkbox">
+                        <label for="show-deleted-keys">Показывать удалённые</label>
+                        <input type="checkbox" id="show-deleted-keys">
+                    </div>
+                </div>
+                
+                <div class="api-keys-list">
+                    <table id="apiKeysTable" class="api-keys-table">
+                        <thead>
+                            <tr>
+                                <th>Имя</th>
+                                <th>API-ключ</th>
+                                <th>Привилегии</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Здесь будет список API-ключей -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+                <!-- Модальное окно для создания API-ключа -->
+        <div id="apiKeyModal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h4>Создать новый API-ключ</h4>
+                <div class="modal-form">
+                    <div class="setting-item">
+                        <label for="api-key-name">Имя</label>
+                        <input type="text" id="api-key-name" placeholder="Введите имя для API-ключа">
+                    </div>
+                    <div class="setting-item">
+                        <label for="api-key-privilege">Привилегии</label>
+                        <select id="api-key-privilege" class="form-control">
+                            <option value="0">Пользователь</option>
+                            <option value="1">Администратор</option>
+                        </select>
+                    </div>
+                    <div class="button-container">
+                        <button id="createApiKeySubmit" class="button button-primary">Создать</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div id="files" class="tab-content">
             <ul class="files-list">
                 {% for item in files|sort(attribute='name')|sort(attribute='is_dir', reverse=true) %}

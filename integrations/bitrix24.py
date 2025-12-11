@@ -1,13 +1,13 @@
 import core.sys_manager
-import core.dbmanagment
+import core.dbmanagement
 import core.logger
 from datetime import datetime, timedelta
 import threading
 import requests
 import time
 
-db_update = core.dbmanagment.DbUpdate()
-db_queries = core.dbmanagment.DbQueries()
+db_update = core.dbmanagement.DbUpdate()
+db_queries = core.dbmanagement.DbQueries()
 
 class Bitrix24Task(core.sys_manager.ResourceManagement):
     bitrix_json_name = "bitrix24.json"
@@ -180,9 +180,9 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
             # Добавляем группу к задаче, если указана
             if self.groups_observers:
                 task_fields['GROUP_ID'] = self.groups_observers
-            
+
             task_data = {'fields': task_fields}
-            
+
             attempt = 0
             while attempt < self.count_attempts:
                 try:
@@ -204,7 +204,7 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
                     time.sleep(self.timeout)
                 else:
                     break
-            
+
             core.logger.bitrix24.info(f"Отправлен запрос на создание задачи для клиента: '{client}'")
             core.logger.bitrix24.info(f"Status Code: {response.status_code}")
             core.logger.bitrix24.debug("Response:")
