@@ -857,14 +857,14 @@ class DbQueries(DatabaseContextManager):
             core.logger.db_service.error("Не удалось получить список API-ключей из базы данных", exc_info=True)
             return []
 
-    def remove_api_key(self, active, api_key):
+    def remove_api_key(self, active, api_key, name):
         try:
             with DatabaseContextManager() as db:
                 db.cursor.execute(
                     'UPDATE api_keys SET "active" = %s WHERE "api_key" = %s',
                     (active, api_key)
                 )
-                core.logger.db_service.debug(f"Изменено состояние API-ключа '{api_key}' на 'active: {active}'")
+                core.logger.db_service.debug(f"Изменено состояние API-ключа '{name}' на 'active: {active}'")
         except Exception:
             core.logger.db_service.error("Не удалось изменить состояние ключа в базе данных", exc_info=True)
 

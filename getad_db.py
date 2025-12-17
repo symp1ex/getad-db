@@ -150,6 +150,9 @@ class WebServerRoute(WebServerSetup):
         self.app.add_url_rule('/api/get_fiscals_data', 'get_fiscals_data',
                               api_connector.requires_api_key(api_method.get_fiscals_data),
                               methods=['GET'])
+        self.app.add_url_rule('/api/get_pos_data', 'get_pos_data',
+                              api_connector.requires_api_key(api_method.get_pos_data),
+                              methods=['GET'])
 
     def index(self):
         return render_template('index.html')
@@ -446,11 +449,12 @@ class WebServerRoute(WebServerSetup):
             data = request.get_json()
             api_key = data.get('api_key')
             active = data.get('active')
+            name = data.get('name')
 
             if not api_key:
                 return jsonify({'success': False, 'error': 'API-ключ не указан'})
 
-            db_queries.remove_api_key(active, api_key)
+            db_queries.remove_api_key(active, api_key, name)
             # После изменения статуса ключа обновляем список API-ключей
             api_connector.update_api_keys()
 

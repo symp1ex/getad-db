@@ -208,6 +208,30 @@ class ApiMethod(ApiConnector):
                                          exc_info=True)
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
+    def get_pos_data(self):
+        try:
+            core.logger.connectors.info("Получен запрос к '/api/get_pos_data'")
+            data, columns = dbquerie.get_only_pos()
+
+            pos_data = []
+
+            for row in data:
+                pos_dict = {}
+                for i, column in enumerate(columns):
+                    # Для полей типа JSON или списков преобразуем в строковый формат
+                    if isinstance(row[i], (dict, list)):
+                        pos_dict[column] = json.dumps(row[i], ensure_ascii=False)
+                    else:
+                        pos_dict[column] = row[i]
+                pos_data.append(pos_dict)
+            return jsonify(pos_data)
+        except Exception as e:
+            core.logger.connectors.warning({'status': 'error', 'message': str(e)})
+            core.logger.connectors.error("Ошибка при получении данных о POS через API",
+                                         exc_info=True)
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 class IikoRms(core.sys_manager.ResourceManagement):
     def __init__(self):
         super().__init__()

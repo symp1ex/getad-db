@@ -245,15 +245,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         const apiKeyEnd = key.api_key.substring(key.api_key.length - 8);
                         const formattedApiKey = `${apiKeyStart}...${apiKeyEnd}`;
                         
-                        // Меняем порядок столбцов, перемещая привилегии ближе к кнопкам
                         row.innerHTML = `
                             <td>${key.name}</td>
                             <td>${formattedApiKey}</td>
                             <td>${key.admin_tag === 1 ? 'Администратор' : 'Пользователь'}</td>
                             <td>
                                 ${key.active === 1 
-                                    ? `<button class="action-button" onclick="toggleApiKey('${key.api_key}', 0)">❌</button>` 
-                                    : `<button class="action-button restore" onclick="toggleApiKey('${key.api_key}', 1)">✔️</button>`}
+                                    ? `<button class="action-button" onclick="toggleApiKey('${key.api_key}', 0, '${key.name}')">❌</button>` 
+                                    : `<button class="action-button restore" onclick="toggleApiKey('${key.api_key}', 1, '${key.name}')">✔️</button>`}
                             </td>
                         `;
                         tableBody.appendChild(row);
@@ -283,7 +282,7 @@ function copyToClipboard(text) {
 }
 
 // Функция для активации/деактивации API-ключа
-function toggleApiKey(apiKey, active) {
+function toggleApiKey(apiKey, active, name) {
     fetch('/toggle_api_key', {
         method: 'POST',
         headers: {
@@ -291,7 +290,8 @@ function toggleApiKey(apiKey, active) {
         },
         body: JSON.stringify({
             api_key: apiKey,
-            active: active
+            active: active,
+            name: name
         })
     })
     .then(response => response.json())
