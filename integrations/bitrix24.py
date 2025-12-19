@@ -11,7 +11,7 @@ db_queries = core.dbmanagement.DbQueries()
 
 class Bitrix24Task(core.sys_manager.ResourceManagement):
     bitrix_json_name = "bitrix24.json"
-    bitrix_json_data = {"enabled": 0, "webhook_url": "", "count_attempts": 5, "timeout": 15}
+    bitrix_json_data = {"enabled": 0, "webhook_url": "", "count_attempts": 5, "timeout": 15, "create_tasks_of_days": 30}
 
     def __init__(self):
         super().__init__()
@@ -30,6 +30,9 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
 
         try: self.timeout = int(self.bitrix_json.get("timeout", 15))
         except: self.timeout = 15
+
+        try: self.create_tasks_of_days = int(self.bitrix_json.get("create_tasks_of_days", 30))
+        except: self.create_tasks_of_days = 30
 
         self.responsible_employees = None
         self.groups_observers = None
@@ -238,10 +241,10 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
         try:
             while True:
                 core.logger.bitrix24.info(
-                    f"Производится поиск клиентов, которым потребуется замена ФН в ближайшие '30' дней")
+                    f"Производится поиск клиентов, которым потребуется замена ФН в ближайшие '{self.create_tasks_of_days}' дней")
 
                 start_date = datetime.now().date()
-                end_date = start_date + timedelta(days=30)
+                end_date = start_date + timedelta(days=self.create_tasks_of_days)
                 fn_task_list = db_queries.get_expire_fn(start_date, end_date, show_marked=False)
 
                 if len(fn_task_list) == 0:
@@ -251,7 +254,7 @@ class Bitrix24Task(core.sys_manager.ResourceManagement):
                     continue
 
                 core.logger.bitrix24.info(
-                    f"Найдено ({len(fn_task_list)}) клиентов, которым потребуется замена ФН в ближайшие '30' дней")
+                    f"Найдено ({len(fn_task_list)}) клиентов, которым потребуется замена ФН в ближайшие '{self.create_tasks_of_days}' дней")
                 for task_data in fn_task_list:
                     self.create_task_sale_fn(task_data)
                     time.sleep(600)

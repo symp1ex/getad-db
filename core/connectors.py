@@ -20,7 +20,9 @@ class ApiConnector(core.sys_manager.ResourceManagement):
         self.json_queue = queue.Queue()
         self.user_api_key = None
         self.admin_api_key = None
-        self.ftp_backup = int(self.config.get("ftp-connect", "ftp_backup", fallback=None))
+
+        try: self.ftp_backup = int(self.config.get("ftp-connect", "ftp_backup", fallback=0))
+        except: self.ftp_backup = 0
 
         # Запускаем обработчик очереди в отдельном потоке
         self.queue_processor = threading.Thread(target=self.process_queue, daemon=True)
@@ -74,13 +76,13 @@ class ApiConnector(core.sys_manager.ResourceManagement):
                         filename = f"TV{teamviever_id}_AD{anydesk_id}.json"
                         dbquerie.save_not_fiscal(json_data, filename)
 
-                    if self.ftp_backup == 1:
-                        self.ftp_upload(json_data, filename)
-
                     # Подтверждаем завершение задачи
                     self.json_queue.task_done()
                     core.logger.connectors.info(
                         f"Обработан JSON через API: {filename}")
+
+                    if self.ftp_backup == 1:
+                        self.ftp_upload(json_data, filename)
                 else:
                     # Если очередь пуста, делаем небольшую паузу чтобы не загружать процессор
                     time.sleep(0.1)

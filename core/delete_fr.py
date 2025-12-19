@@ -1,12 +1,18 @@
 import core.logger
 import core.configs
-from core.connectors import FtpContextManager
-from core.dbmanagement import DatabaseContextManager
+import core.connectors
+import core.dbmanagement
 import about
 from datetime import datetime
 import threading
 
 config = core.configs.read_config_ini(about.config_path)
+
+db_context_manager = core.dbmanagement.DatabaseContextManager()
+db_update = core.dbmanagement.DbUpdate()
+
+ftp_context_manager = core.connectors.FtpContextManager()
+api_connector = core.connectors.ApiConnector()
 
 def messages_append(messages, message):
     try:
@@ -19,7 +25,7 @@ def messages_append(messages, message):
 def ftp_delete_json(json_name):
     messages = []
     try:
-        with core.connectors.FtpContextManager() as ftp:
+        with ftp_context_manager as ftp:
             # Проверяем наличие файла на сервере
             files = ftp.nlst()  # Получаем список файлов в текущей директории
             if f"{json_name}.json" in files:
@@ -37,7 +43,7 @@ def ftp_delete_json(json_name):
 def delete_record_by_serial_number(json_name):
     messages = []
     try:
-        with DatabaseContextManager() as db:
+        with db_context_manager as db:
             # Выполнение запроса на удаление
             db.cursor.execute('DELETE FROM pos_fiscals WHERE "serialNumber" = %s', (json_name,))
 
@@ -74,10 +80,11 @@ def delete_record_by_serial_number(json_name):
 def delete_fr(json_name):
     messages = []
     try:
-        # Создаем новый поток и передаем в него функцию get_db_data()
-        ftp_delete_json_thread = threading.Thread(target=messages.extend(ftp_delete_json(json_name)))
-        # Запускаем поток
-        ftp_delete_json_thread.start()
+        if api_connector.ftp_backup == 1 or db_update.ftp_update == 1:
+            # Создаем новый поток и передаем в него функцию get_db_data()
+            ftp_delete_json_thread = threading.Thread(target=messages.extend(ftp_delete_json(json_name)))
+            # Запускаем поток
+            ftp_delete_json_thread.start()
 
         delete_record_by_serial_number_theard = threading.Thread(target=messages.extend(delete_record_by_serial_number(json_name)))
         # Запускаем поток

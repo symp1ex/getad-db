@@ -101,7 +101,7 @@ class WebServerSetup(core.sys_manager.ResourceManagement):
 
 class WebServerRoute(WebServerSetup):
     default_visible_columns = ['serialNumber', 'modelName', 'RNM', 'organizationName', 'fn_serial', 'dateTime_end',
-                               'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked',
+                               'bootVersion', 'ffdVersion', 'INN', 'attribute_excise', 'attribute_marked', 'installed_driver',
                                'licenses', 'url_rms', 'teamviewer_id', 'anydesk_id', 'litemanager_id']
     def __init__(self):
         super().__init__()
@@ -345,6 +345,7 @@ class WebServerRoute(WebServerSetup):
 
                     bitrix_data['count_attempts'] = int(settings['bitrix24'].get('count_attempts', 5))
                     bitrix_data['timeout'] = int(settings['bitrix24'].get('timeout', 15))
+                    bitrix_data['create_tasks_of_days'] = int(settings['bitrix24'].get('create_tasks_of_days', 30))
 
                 # Сохраняем обновленные настройки Bitrix24
                 bitrix24.write_json_file(bitrix_data, "source", bitrix24.bitrix_json_name)
@@ -399,6 +400,8 @@ class WebServerRoute(WebServerSetup):
             server_name = data['server_name']
 
             result = db_queries.edit_client_name(url_rms, server_name)
+            core.logger.web_server.debug(f"Запрос на изменение имени клиента '{url_rms}' на '{data['server_name']}'")
+            core.logger.web_server.debug(result)
             return jsonify(result)
         except Exception as e:
             core.logger.web_server.error("Ошибка при обновлении имени клиента", exc_info=True)
@@ -423,9 +426,18 @@ class WebServerRoute(WebServerSetup):
             admin_tag = data.get('admin_tag', 0)
 
             if not name:
+                core.logger.web_server.warning(f"Попытка создать api-ключ без указания имени")
                 return jsonify({'success': False, 'error': 'Имя не может быть пустым'})
 
+            keys = db_queries.get_api_key(0, True, True)
+            name_exists = any(item['name'] == name for item in keys)
+            if name_exists:
+                core.logger.web_server.warning(f"Попытка создать api-ключ с неуникальным именем")
+                return jsonify({'success': False, 'error': 'Имя api-ключа должно быть уникальным'})
+
             result = db_queries.add_api_key(name, admin_tag)
+            core.logger.web_server.debug("Выполнен запрос на добавление нового API-ключа")
+            core.logger.web_server.debug(result)
 
             # После создания нового ключа обновляем список API-ключей
             api_connector.update_api_keys()
@@ -439,6 +451,8 @@ class WebServerRoute(WebServerSetup):
         try:
             show_deleted = request.args.get('show_deleted', 'false').lower() == 'true'
             keys = db_queries.get_api_key(0, show_deleted, True)
+            core.logger.web_server.debug(f"Получен список API-ключей:")
+            core.logger.web_server.debug(keys)
             return jsonify({'success': True, 'keys': keys})
         except Exception as e:
             core.logger.web_server.error("Ошибка при получении списка API-ключей", exc_info=True)
@@ -455,6 +469,9 @@ class WebServerRoute(WebServerSetup):
                 return jsonify({'success': False, 'error': 'API-ключ не указан'})
 
             db_queries.remove_api_key(active, api_key, name)
+
+            core.logger.web_server.debug(f"Выполнен запрос на изменение статуса API-ключа '{name}' на '{active}'")
+
             # После изменения статуса ключа обновляем список API-ключей
             api_connector.update_api_keys()
 

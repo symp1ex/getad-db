@@ -271,6 +271,11 @@
                             value="{{ bitrix_json['timeout'] }}">
                     </div>
                     <div class="setting-item">
+                        <label for="create_tasks_of_days">Создание задачи до окончания ФН (дней)</label>
+                        <input type="number" id="create_tasks_of_days" name="bitrix24.create_tasks_of_days"
+                            value="{{ bitrix_json['create_tasks_of_days'] }}">
+                    </div>
+                    <div class="setting-item">
                         <label for="responsible-employee">Ответственный сотрудник</label>
                         <select class="form-control" name="bitrix24.responsible" id="responsible-employee">
                             <option value="">None</option>

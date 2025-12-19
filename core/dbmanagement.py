@@ -96,7 +96,8 @@ class DatabaseContextManager(core.sys_manager.ResourceManagement):
 class DbQueries(DatabaseContextManager):
     def __init__(self):
         super().__init__()
-        self.dont_valid_fn = int(self.config.get("db-update", "day_filter_expire", fallback=5))
+        try: self.dont_valid_fn = int(self.config.get("db-update", "day_filter_expire", fallback=14))
+        except: self.dont_valid_fn = 14
 
     def save_not_fiscal(self, json_data, filename):
         try:
@@ -1029,9 +1030,15 @@ class DbQueries(DatabaseContextManager):
 class DbUpdate(DbQueries):
     def __init__(self):
         super().__init__()
-        self.dbupdate_period = int(self.config.get("db-update", "dbupdate-period-sec", fallback=None))
-        self.reference_flaq = int(self.config.get("db-update", "reference", fallback=None))
-        self.ftp_update = int(self.config.get("ftp-connect", "ftp_update", fallback=None))
+        try: self.dbupdate_period = int(self.config.get("db-update", "dbupdate-period-sec", fallback=900))
+        except: self.dbupdate_period = 900
+
+        try: self.reference_flaq = int(self.config.get("db-update", "reference", fallback=0))
+        except: self.reference_flaq = 0
+
+        try: self.ftp_update = int(self.config.get("ftp-connect", "ftp_update", fallback=0))
+        except: self.ftp_update = 0
+
         self.clients_update_process = 0
 
     def pos_tables_update(self):

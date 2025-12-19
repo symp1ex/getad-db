@@ -2,5 +2,6 @@
     "enabled": false,
     "webhook_url": "",
     "count_attempts": 5,
-    "timeout": 15
+    "timeout": 15,
+	"create_tasks_of_days": 30
 }
