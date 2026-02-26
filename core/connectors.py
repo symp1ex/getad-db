@@ -71,9 +71,8 @@ class ApiConnector(core.sys_manager.ResourceManagement):
                         dbquerie.save_fiscals({json_data["serialNumber"]: json_data})
                         filename = f"{json_data.get('serialNumber')}.json"
                     else:
-                        teamviever_id = json_data.get("teamviewer_id")
-                        anydesk_id = json_data.get("anydesk_id")
-                        filename = f"TV{teamviever_id}_AD{anydesk_id}.json"
+                        uuid = json_data.get("uuid")
+                        filename = f"{uuid}.json"
                         dbquerie.save_not_fiscal(json_data, filename)
 
                     # Подтверждаем завершение задачи

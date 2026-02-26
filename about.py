@@ -1,3 +1,3 @@
-version = '0.8.2.10'
+version = '0.8.2.11'
 
 config_path = 'source/config.ini'
