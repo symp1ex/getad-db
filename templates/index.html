@@ -1,64 +1,155 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <title>POSRelayd_DB</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
-    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/index.js') }}" defer></script>
 </head>
 <body>
-    <div class="background-layer"></div>
-    <div class="header-container">
-        <h1>POSRelayd_DB</h1>
-        <a href="{{ url_for('logout') }}" class="logout-icon">
-            <img src="{{ url_for('static', filename='logout.png') }}" alt="Logout">
-        </a>
-        <a href="{{ url_for('settings') }}" class="settings-icon">
-            <img src="{{ url_for('static', filename='gear.png') }}" alt="Settings">
-        </a>
-    </div>
-    
-    <div class="container">
-	  <div class="search-panel" style="flex: 1">
-			<h3>Поиск по базе данных ККТ</h3>
-			<form action="/search" method="post">
-				<div class="flex-container">
-					<input type="text" name="search_query" placeholder="Введите запрос" style="flex: 1">
-					<button class="button button-primary" type="submit">Поиск</button>
-				</div>
-			</form>
-		</div>	
-	
-        <div class="card">
-            <a href="/fiscals" class="button button-primary">База данных ККТ</a>
-            <a href="/expire_fn" class="button button-primary">Истекающие ФН</a>
-            <a href="/onlypos" class="button button-danger">Неудачные попытки подключения к ККТ</a>
+    <header class="portal-header">
+        <div class="header-inner">
+            <h1>POSRelayd_DB</h1>
+            <nav class="header-actions" aria-label="Управление порталом">
+                <a href="{{ url_for('settings') }}" class="header-icon" title="Настройки">
+                    <img src="{{ url_for('static', filename='gear.png') }}" alt="Настройки">
+                </a>
+                <a href="{{ url_for('logout') }}" class="header-icon header-icon-logout" title="Выйти">
+                    <img src="{{ url_for('static', filename='logout.png') }}" alt="Выйти">
+                </a>
+            </nav>
         </div>
+    </header>
 
-        <div class="card">
-            <form id="searchForm" class="search-days" method="post">
-                <div class="flex-container">
-                    <span>Показать список ККТ, не оправлявших данные более</span>
-                    <input type="number" name="search_query" min="1" max="365" placeholder="1" style="width: 80px">
-                    <span>дней</span>
-                    <button type="submit" class="button button-primary" onclick="submitForm('/dont-update', event)">По дате подключения</button>
-                    <button type="submit" class="button button-primary" onclick="submitForm('/dont-validation', event)">По дате валидации</button>
+    <main class="dashboard-shell">
+        <section class="panel search-panel" aria-labelledby="search-title">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">База данных</p>
+                    <h2 id="search-title">Поиск ККТ</h2>
                 </div>
+            </div>
+            <form action="{{ url_for('search') }}" method="post" class="inline-form">
+                <label class="visually-hidden" for="kkt-search">Серийный номер, РНМ или номер ФН</label>
+                <input id="kkt-search" type="text" name="search_query"
+                       placeholder="Поиск по серийному номеру / РНМ / номеру ФН...">
+                <button class="button button-primary" type="submit">Найти</button>
             </form>
-        </div>
+        </section>
 
-		 <div class="flex-container">
-			<div style="flex: 1"></div>
-			<div class="delete-panel" style="flex: 1">
-				<h3>Удаление ККТ из базы данных</h3>
-				<form class="delete-form" onsubmit="event.preventDefault(); deleteFR();">
-					<div class="flex-container">
-						<input type="text" name="search_query" placeholder="Введите серийный номер ККТ" style="flex: 1">
-						<button class="button button-danger" type="submit">Удалить</button>
-					</div>
-				</form>
-			</div>
-		</div>
-    </div>
+        <section class="stats-grid" aria-label="Статистика ККТ">
+            <a class="stat-card" href="{{ url_for('fiscals') }}">
+                <span class="stat-icon" aria-hidden="true">▤</span>
+                <span class="stat-content">
+                    <span class="stat-value">{{ stats.total_kkt }}</span>
+                    <span class="stat-label">Всего ККТ</span>
+                </span>
+            </a>
+            <a class="stat-card" href="{{ url_for('fiscals') }}">
+                <span class="stat-icon stat-icon-success" aria-hidden="true">✓</span>
+                <span class="stat-content">
+                    <span class="stat-value">{{ stats.active_kkt }}</span>
+                    <span class="stat-label">Активные ККТ</span>
+                </span>
+            </a>
+            <a class="stat-card" href="{{ url_for('expire_fn') }}">
+                <span class="stat-icon stat-icon-warning" aria-hidden="true">◷</span>
+                <span class="stat-content">
+                    <span class="stat-value">{{ stats.expire_fn }}</span>
+                    <span class="stat-label">Истекает ФН</span>
+                </span>
+            </a>
+            <a class="stat-card" href="{{ url_for('pos') }}">
+                <span class="stat-icon" aria-hidden="true">⌘</span>
+                <span class="stat-content">
+                    <span class="stat-value">{{ stats.all_stations }}</span>
+                    <span class="stat-label">Все станции</span>
+                </span>
+            </a>
+        </section>
+
+        <section class="dashboard-grid">
+            <article class="panel attention-panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Контроль состояния</p>
+                        <h2>ККТ требуют внимания</h2>
+                    </div>
+                </div>
+                <div class="attention-list">
+                    <a href="{{ url_for('expire_fn') }}" class="attention-row">
+                        <span>
+                            <strong>Истекающие ФН</strong>
+                            <small>Стандартный период замены</small>
+                        </span>
+                        <span class="attention-value">{{ stats.expire_fn }}</span>
+                    </a>
+                    <a href="{{ url_for('fiscals') }}" class="attention-row">
+                        <span>
+                            <strong>Нет данных &gt; {{ stats.day_filter_expire }} дней</strong>
+                            <small>По времени последней валидации или подключения</small>
+                        </span>
+                        <span class="attention-value attention-value-danger">{{ stats.expired_kkt }}</span>
+                    </a>
+                </div>
+                <a class="text-link" href="{{ url_for('fiscals') }}">Перейти к списку →</a>
+            </article>
+
+            <article class="panel quick-panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Навигация</p>
+                        <h2>Быстрые действия</h2>
+                    </div>
+                </div>
+                <div class="quick-links">
+                    <a href="{{ url_for('fiscals') }}">Открыть базу ККТ <span>→</span></a>
+                    <a href="{{ url_for('expire_fn') }}">Истекающие ФН <span>→</span></a>
+                    <a href="{{ url_for('pos') }}">Все станции <span>→</span></a>
+                </div>
+
+                <form id="searchForm" class="days-filter" method="post">
+                    <label for="days-search">
+                        Показать список ККТ, не отправлявших данные более
+                    </label>
+                    <div class="days-input-row">
+                        <input id="days-search" type="number" name="search_query" min="1" max="365"
+                               placeholder="1">
+                        <span>дней</span>
+                    </div>
+                    <div class="days-actions">
+                        <button type="submit" class="button button-secondary"
+                                onclick="submitForm('/dont-update', event)">По дате подключения</button>
+                        <button type="submit" class="button button-secondary"
+                                onclick="submitForm('/dont-validation', event)">По дате валидации</button>
+                    </div>
+                </form>
+            </article>
+        </section>
+
+        <section class="panel maintenance-panel" aria-labelledby="maintenance-title">
+            <div class="section-heading maintenance-heading">
+                <div>
+                    <p class="eyebrow">Администрирование</p>
+                    <h2 id="maintenance-title">Обслуживание</h2>
+                </div>
+                <span class="maintenance-note">Опасные действия</span>
+            </div>
+            <div class="maintenance-content">
+                <div>
+                    <h3>Удаление ККТ из базы</h3>
+                    <p>Укажите серийный номер удаляемой ККТ.</p>
+                </div>
+                <form class="delete-form inline-form" onsubmit="event.preventDefault(); deleteFR();">
+                    <label class="visually-hidden" for="delete-serial">Серийный номер ККТ</label>
+                    <input id="delete-serial" type="text" name="search_query"
+                           placeholder="Серийный номер ККТ">
+                    <button class="button button-danger" type="submit">Удалить</button>
+                </form>
+            </div>
+        </section>
+    </main>
 </body>
 </html>

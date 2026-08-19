@@ -33,7 +33,7 @@ function showModal(messages) {
 	document.body.appendChild(modal);
 }
 
-function submitForm(action) {
+function submitForm(action, event) {
 	event.preventDefault(); // Предотвращаем стандартную отправку формы
 	const form = document.getElementById('searchForm');
 	form.action = action;

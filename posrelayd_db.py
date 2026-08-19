@@ -155,7 +155,21 @@ class WebServerRoute(WebServerSetup):
                               methods=['GET'])
 
     def index(self):
-        return render_template('index.html')
+        stats = {
+            'total_kkt': 0,
+            'active_kkt': 0,
+            'expired_kkt': 0,
+            'expire_fn': 0,
+            'all_stations': 0,
+            'day_filter_expire': getattr(db_queries, 'dont_valid_fn', 14),
+        }
+        try:
+            stats.update(db_queries.get_dashboard_stats())
+        except Exception:
+            core.logger.web_server.error(
+                "Не удалось загрузить статистику главной страницы", exc_info=True)
+
+        return render_template('index.html', stats=stats)
 
     def fiscals(self):
         data, columns = db_queries.get_data_pos_fiscals()

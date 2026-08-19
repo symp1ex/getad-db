@@ -99,6 +99,56 @@ class DbQueries(DatabaseContextManager):
         try: self.dont_valid_fn = int(self.config.get("db-update", "day_filter_expire", fallback=14))
         except: self.dont_valid_fn = 14
 
+    @staticmethod
+    def get_effective_time(current_time, v_time):
+        """Return the timestamp used by the existing KKT freshness checks."""
+        return v_time if v_time not in (None, '', 'None') else current_time
+
+    def get_dashboard_stats(self):
+        """Collect the counters used only by the portal dashboard."""
+        stats = {
+            'total_kkt': 0,
+            'active_kkt': 0,
+            'expired_kkt': 0,
+            'expire_fn': 0,
+            'all_stations': 0,
+            'day_filter_expire': self.dont_valid_fn,
+        }
+
+        try:
+            with DatabaseContextManager() as db:
+                db.cursor.execute('SELECT "current_time", "v_time" FROM pos_fiscals')
+                kkt_times = db.cursor.fetchall()
+
+                db.cursor.execute('SELECT COUNT(*) FROM pos_not_fiscals')
+                station_count = db.cursor.fetchone()
+
+            stats['total_kkt'] = len(kkt_times)
+            stats['all_stations'] = station_count[0] if station_count else 0
+
+            for current_time, v_time in kkt_times:
+                time_to_check = self.get_effective_time(current_time, v_time)
+
+                # Records without either timestamp are not classified as expired.
+                if not time_to_check:
+                    continue
+
+                if self.if_show_fn_to_date(time_to_check, self.dont_valid_fn):
+                    stats['active_kkt'] += 1
+                else:
+                    # This intentionally matches the existing row-highlighting
+                    # behaviour, including safe handling of an invalid date.
+                    stats['expired_kkt'] += 1
+
+            start_date, end_date = self.get_default_dates()
+            expire_records = self.get_expire_fn(start_date, end_date, False) or []
+            stats['expire_fn'] = len(expire_records)
+        except Exception:
+            core.logger.db_service.error(
+                "Не удалось получить статистику для главной страницы", exc_info=True)
+
+        return stats
+
     def save_not_fiscal(self, json_data, filename):
         try:
             with DatabaseContextManager() as db:
@@ -386,8 +436,8 @@ class DbQueries(DatabaseContextManager):
                     # Проверка устаревания записи
                     time_to_check = None
                     if v_time_index >= 0 and current_time_index >= 0:
-                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                            current_time_index]
+                        time_to_check = self.get_effective_time(
+                            row[current_time_index], row[v_time_index])
 
                     is_expired = False
                     if time_to_check:
@@ -469,8 +519,8 @@ class DbQueries(DatabaseContextManager):
                     # Проверка устаревания записи
                     time_to_check = None
                     if v_time_index >= 0 and current_time_index >= 0:
-                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                            current_time_index]
+                        time_to_check = self.get_effective_time(
+                            row[current_time_index], row[v_time_index])
 
                     is_expired = False
                     if time_to_check:
@@ -548,8 +598,8 @@ class DbQueries(DatabaseContextManager):
                              'dateTime_end', 'current_time', 'v_time', 'url_rms', 'address'], row))
 
                     # Определяем, какое время использовать
-                    time_to_check = record['v_time'] if record['v_time'] not in (None, '', 'None') else record[
-                        'current_time']
+                    time_to_check = self.get_effective_time(
+                        record['current_time'], record['v_time'])
 
                     # Проверяем условие через функцию if_show_fn_to_date
                     if self.if_show_fn_to_date(time_to_check, self.dont_valid_fn):
@@ -607,8 +657,8 @@ class DbQueries(DatabaseContextManager):
                     # Проверка устаревания записи
                     time_to_check = None
                     if v_time_index >= 0 and current_time_index >= 0:
-                        time_to_check = row[v_time_index] if row[v_time_index] not in (None, '', 'None') else row[
-                            current_time_index]
+                        time_to_check = self.get_effective_time(
+                            row[current_time_index], row[v_time_index])
 
                     is_expired = False
                     if time_to_check:
