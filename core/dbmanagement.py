@@ -104,6 +104,14 @@ class DbQueries(DatabaseContextManager):
         """Return the timestamp used by the existing KKT freshness checks."""
         return v_time if v_time not in (None, '', 'None') else current_time
 
+    def get_kkt_expiration_status(self, current_time, v_time):
+        """Return False for active, True for expired, and None for undated KKT."""
+        effective_time = self.get_effective_time(current_time, v_time)
+        if effective_time in (None, '', 'None'):
+            return None
+
+        return not self.if_show_fn_to_date(effective_time, self.dont_valid_fn)
+
     def get_dashboard_stats(self):
         """Collect the counters used only by the portal dashboard."""
         stats = {
@@ -127,17 +135,10 @@ class DbQueries(DatabaseContextManager):
             stats['all_stations'] = station_count[0] if station_count else 0
 
             for current_time, v_time in kkt_times:
-                time_to_check = self.get_effective_time(current_time, v_time)
-
-                # Records without either timestamp are not classified as expired.
-                if not time_to_check:
-                    continue
-
-                if self.if_show_fn_to_date(time_to_check, self.dont_valid_fn):
+                expiration_status = self.get_kkt_expiration_status(current_time, v_time)
+                if expiration_status is False:
                     stats['active_kkt'] += 1
-                else:
-                    # This intentionally matches the existing row-highlighting
-                    # behaviour, including safe handling of an invalid date.
+                elif expiration_status is True:
                     stats['expired_kkt'] += 1
 
             start_date, end_date = self.get_default_dates()
@@ -403,55 +404,59 @@ class DbQueries(DatabaseContextManager):
             core.logger.db_service.error(
                 "Не удалось выполнить очистку устаревших записей из таблицы 'clients'", exc_info=True)
 
-    def get_data_pos_fiscals(self):
+    def _get_pos_fiscals_rows(self):
+        """Load fiscal rows and their database columns without presentation data."""
+        with DatabaseContextManager() as db:
+            db.cursor.execute('SELECT * FROM pos_fiscals')
+            data = db.cursor.fetchall()
+
+            db.cursor.execute('''
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'pos_fiscals'
+                ORDER BY ordinal_position
+            ''')
+            columns = [column[0] for column in db.cursor.fetchall()]
+
+        return data, columns
+
+    def _prepare_pos_fiscals(self, data, columns, required_status=None):
+        """Append the row-highlighting flag and optionally filter by KKT status."""
+        current_time_index = columns.index('current_time') if 'current_time' in columns else -1
+        v_time_index = columns.index('v_time') if 'v_time' in columns else -1
+        modified_data = []
+
+        for row in data:
+            expiration_status = None
+            if current_time_index >= 0 and v_time_index >= 0:
+                expiration_status = self.get_kkt_expiration_status(
+                    row[current_time_index], row[v_time_index])
+
+            if required_status is not None and expiration_status is not required_status:
+                continue
+
+            modified_row = list(row)
+            modified_row.append(expiration_status is True)
+            modified_data.append(modified_row)
+
+        return modified_data
+
+    def _get_data_pos_fiscals_by_status(self, required_status=None):
         try:
-            with DatabaseContextManager() as db:
-                db.cursor.execute('SELECT * FROM pos_fiscals')
-                data = db.cursor.fetchall()
-
-                # Получаем названия столбцов из информационной схемы PostgreSQL
-                db.cursor.execute('''
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'pos_fiscals'
-                    ORDER BY ordinal_position
-                ''')
-                columns = [column[0] for column in db.cursor.fetchall()]
-
-                # Создаём новый список для данных с дополнительной информацией об устаревании
-                modified_data = []
-                for row in data:
-                    row_dict = dict(zip(columns, row))  # Преобразуем строку в словарь для удобства доступа
-                    modified_row = list(row)
-
-                    # Определяем индексы важных столбцов
-                    licenses_data_index = columns.index('licenses') if 'licenses' in columns else -1
-                    current_time_index = columns.index('current_time') if 'current_time' in columns else -1
-                    v_time_index = columns.index('v_time') if 'v_time' in columns else -1
-
-                    # Обработка licenses
-                    if licenses_data_index >= 0 and row[licenses_data_index]:
-                        modified_row[licenses_data_index] = row[licenses_data_index]
-
-                    # Проверка устаревания записи
-                    time_to_check = None
-                    if v_time_index >= 0 and current_time_index >= 0:
-                        time_to_check = self.get_effective_time(
-                            row[current_time_index], row[v_time_index])
-
-                    is_expired = False
-                    if time_to_check:
-                        is_expired = not self.if_show_fn_to_date(time_to_check, self.dont_valid_fn)
-
-                    # Добавляем признак устаревания в строку
-                    modified_row.append(is_expired)
-
-                    modified_data.append(modified_row)
-
-            return modified_data, columns
+            data, columns = self._get_pos_fiscals_rows()
+            return self._prepare_pos_fiscals(data, columns, required_status), columns
         except Exception:
             core.logger.db_service.error("При чтении таблицы 'pos_fiscals' произошло исключение", exc_info=True)
             return [], []
+
+    def get_data_pos_fiscals(self):
+        return self._get_data_pos_fiscals_by_status()
+
+    def get_active_kkt(self):
+        return self._get_data_pos_fiscals_by_status(False)
+
+    def get_expired_kkt(self):
+        return self._get_data_pos_fiscals_by_status(True)
 
     def get_only_pos(self):
         try:

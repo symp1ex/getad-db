@@ -111,6 +111,8 @@ class WebServerRoute(WebServerSetup):
         # Регистрация всех маршрутов
         self.app.add_url_rule('/', 'index', self.requires_auth(self.index), methods=['GET'])
         self.app.add_url_rule('/fiscals', 'fiscals', self.requires_auth(self.fiscals), methods=['GET'])
+        self.app.add_url_rule('/active-kkt', 'active_kkt', self.requires_auth(self.active_kkt), methods=['GET'])
+        self.app.add_url_rule('/expired-kkt', 'expired_kkt', self.requires_auth(self.expired_kkt), methods=['GET'])
         self.app.add_url_rule('/onlypos', 'pos', self.requires_auth(self.pos), methods=['GET'])
         self.app.add_url_rule('/search', 'search', self.requires_auth(self.search), methods=['GET', 'POST'])
         self.app.add_url_rule('/dont-update', 'dont_update', self.requires_auth(self.dont_update),
@@ -174,6 +176,17 @@ class WebServerRoute(WebServerSetup):
     def fiscals(self):
         data, columns = db_queries.get_data_pos_fiscals()
 
+        return self.render_fiscals(data, columns)
+
+    def active_kkt(self):
+        data, columns = db_queries.get_active_kkt()
+        return self.render_fiscals(data, columns)
+
+    def expired_kkt(self):
+        data, columns = db_queries.get_expired_kkt()
+        return self.render_fiscals(data, columns)
+
+    def render_fiscals(self, data, columns):
         return render_template('fiscals.html',
                                data=data,
                                columns=columns,
